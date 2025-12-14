@@ -27,6 +27,7 @@
 /* USER CODE BEGIN Includes */
 #include "usbd_cdc_if.h"
 #include "mpu6050.h"
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -103,16 +104,16 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* USER CODE END WHILE */
-    HAL_StatusTypeDef ret = HAL_I2C_IsDeviceReady(&hi2c2, 0b1101000 << 1, 1, 100);
-    if(ret == HAL_OK){
-      uint8_t buffer[] = "Device connected";
-      CDC_Transmit_FS(buffer, sizeof(buffer));
-    } else {
-      uint8_t buffer1[] = "Unable to connect";
-      CDC_Transmit_FS(buffer1, sizeof(buffer1));
+    
+    HAL_StatusTypeDef st;
+    uint8_t *acc = mpu6050_read_gyro(&st);
+    int16_t tmp;
+    if(st == HAL_OK){
+      for(int i = 0; i < 5; i += 2) {
+        tmp = ((acc[i] << 8) | (acc[i + 1]));
+      }
     }
-
+      
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
