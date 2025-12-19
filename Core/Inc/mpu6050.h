@@ -30,7 +30,7 @@
 #define ACCEL_REG_BASE 0x3B
 #define GYRO_REG_BASE 0x43
 
-void mpu6050_init(void);
+void mpu6050_init(HAL_StatusTypeDef *status);
 uint8_t *mpu6050_read_acc(HAL_StatusTypeDef *status);
 uint8_t *mpu6050_read_gyro(HAL_StatusTypeDef *status);
 

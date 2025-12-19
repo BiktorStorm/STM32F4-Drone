@@ -1,0 +1,10 @@
+20:05:32 **** Incremental Build of configuration Debug for project SWW_mpu6050 ****
+make -j7 all 
+arm-none-eabi-size  SWW_mpu6050.elf 
+   text	   data	    bss	    dec	    hex	filename
+   9428	    104	   1992	  11524	   2d04	SWW_mpu6050.elf
+Finished building: default.size.stdout
+ 
+
+20:05:32 Build Finished. 0 errors, 0 warnings. (took 185ms)
+

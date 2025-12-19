@@ -1,0 +1,49 @@
+20:00:08 **** Incremental Build of configuration Debug for project SWW_mpu6050 ****
+make -j7 all 
+arm-none-eabi-size  SWW_mpu6050.elf 
+   text	   data	    bss	    dec	    hex	filename
+   9428	    104	   1992	  11524	   2d04	SWW_mpu6050.elf
+Finished building: default.size.stdout
+ 
+20:00:13 **** Incremental Build of configuration Debug for project SWW_mpu6050 ****
+make -j7 all 
+arm-none-eabi-size  SWW_mpu6050.elf 
+   text	   data	    bss	    dec	    hex	filename
+   9428	    104	   1992	  11524	   2d04	SWW_mpu6050.elf
+Finished building: default.size.stdout
+ 
+20:01:09 **** Incremental Build of configuration Debug for project SWW_mpu6050 ****
+make -j7 all 
+arm-none-eabi-size  SWW_mpu6050.elf 
+   text	   data	    bss	    dec	    hex	filename
+   9428	    104	   1992	  11524	   2d04	SWW_mpu6050.elf
+Finished building: default.size.stdout
+ 
+20:02:54 **** Incremental Build of configuration Debug for project SWW_mpu6050 ****
+make -j7 all 
+arm-none-eabi-size  SWW_mpu6050.elf 
+   text	   data	    bss	    dec	    hex	filename
+   9428	    104	   1992	  11524	   2d04	SWW_mpu6050.elf
+Finished building: default.size.stdout
+ 
+20:04:59 **** Incremental Build of configuration Debug for project SWW_mpu6050 ****
+make -j7 all 
+arm-none-eabi-size  SWW_mpu6050.elf 
+   text	   data	    bss	    dec	    hex	filename
+   9428	    104	   1992	  11524	   2d04	SWW_mpu6050.elf
+Finished building: default.size.stdout
+ 
+20:05:14 **** Incremental Build of configuration Debug for project SWW_mpu6050 ****
+make -j7 all 
+arm-none-eabi-size  SWW_mpu6050.elf 
+   text	   data	    bss	    dec	    hex	filename
+   9428	    104	   1992	  11524	   2d04	SWW_mpu6050.elf
+Finished building: default.size.stdout
+ 
+20:05:32 **** Incremental Build of configuration Debug for project SWW_mpu6050 ****
+make -j7 all 
+arm-none-eabi-size  SWW_mpu6050.elf 
+   text	   data	    bss	    dec	    hex	filename
+   9428	    104	   1992	  11524	   2d04	SWW_mpu6050.elf
+Finished building: default.size.stdout
+ 
