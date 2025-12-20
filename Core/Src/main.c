@@ -18,13 +18,15 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "stm32f4xx_hal_def.h"
+#include "stm32f4xx_hal.h"
 #include "usb_device.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "stm32f4xx_hal_def.h"
 #include "usbd_cdc_if.h"
 #include "mpu6050.h"
+#include <stdint.h>
 #include <stdio.h>
 /* USER CODE END Includes */
 
@@ -45,14 +47,19 @@
 
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c1;
+DMA_HandleTypeDef hdma_i2c1_rx;
 
 /* USER CODE BEGIN PV */
 uint8_t *acc;
+static HAL_StatusTypeDef status = HAL_OK;
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
 
@@ -92,51 +99,63 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_USB_DEVICE_Init();
   MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
   int16_t acc_X = 0;
   int16_t acc_Y = 0;
   int16_t acc_Z = 0;
+
+  int16_t gyro_X = 0;
+  int16_t gyro_Y = 0;
+  int16_t gyro_Z = 0;
+
   
-  HAL_StatusTypeDef status;
+  
   mpu6050_init(&status);
   	  if(status == HAL_OK){
       uint8_t succes_msg[] = "Init success\n";
       CDC_Transmit_FS(succes_msg, sizeof(succes_msg));
 	  }
+  
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  HAL_Delay(100);
-    uint8_t *acc = mpu6050_read_acc(&status);
-    if(status == HAL_OK){
-      acc_X = (int16_t)((acc[0] << 8) | (acc[1]));
-      acc_Y = (int16_t)((acc[2] << 8) | (acc[3]));
-      acc_Z = (int16_t)((acc[4] << 8) | (acc[5]));
-      char cdc_buf[64];
-      int len = snprintf(cdc_buf, sizeof(cdc_buf), "ACC X =%d\r\nY=%d\r\nZ=%d\r\n", acc_X, acc_Y, acc_Z);
-      if(len > 0){
-        if (len > sizeof(cdc_buf))
-            len = sizeof(cdc_buf);  // clamp if truncated
-        while (CDC_Transmit_FS((uint8_t*)cdc_buf, len) == USBD_BUSY){
+    if(!mpu6050_is_busy() && !mpu6050_ready()) {
+      mpu6050_read_DMA_start(&status);
+    }
+    
+    if(mpu6050_ready()) {
+      mpu6050_clear_ready();
+      const uint8_t *buffer = mpu6050_raw_data(); //temperature available at indeces: 6 and 7
+      acc_X = (int16_t)((buffer[0] << 8) | (buffer[1]));
+      acc_Y = (int16_t)((buffer[2] << 8) | (buffer[3]));
+      acc_Z = (int16_t)((buffer[4] << 8) | (buffer[5]));
+
+      gyro_X = (int16_t)((buffer[8] << 8) | (buffer[9]));
+      gyro_Y = (int16_t)((buffer[10] << 8) | (buffer[11]));
+      gyro_Z = (int16_t)((buffer[12] << 8) | (buffer[13]));
+      
+      if(status == HAL_OK) {
+        char cdc_buf[64];
+        int len = snprintf(cdc_buf, sizeof(cdc_buf), "ACC: X =%d Y=%d Z=%d\r\n Gyro: X =%d Y=%d Z=%d\r\n", acc_X, acc_Y, acc_Z, gyro_X, gyro_Y, gyro_Z);
+        if(len > 0){
+          if (len > sizeof(cdc_buf)) {
+            len = sizeof(cdc_buf);  
+          }
+          // CDC_Transmit_FS((uint8_t*)cdc_buf, len);
+          while (CDC_Transmit_FS((uint8_t*)cdc_buf, len) == USBD_BUSY) {
             HAL_Delay(1);
+          }
         }
       }
-  
-    } 
-    
-    // HAL_StatusTypeDef st;
-    // uint8_t *acc = mpu6050_read_gyro(&st);
-    // if(st == HAL_OK){
-    //   acc_X = ((acc[0] << 8) | (acc[1]));
-    //   acc_Y = ((acc[2] << 8) | (acc[3]));
-    //   acc_Z = ((acc[4] << 8) | (acc[5]));
-    // }
-    /* USER CODE END WHILE */
+    }
+        /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
   }
@@ -219,6 +238,22 @@ static void MX_I2C1_Init(void)
   /* USER CODE BEGIN I2C1_Init 2 */
 
   /* USER CODE END I2C1_Init 2 */
+
+}
+
+/**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Stream0_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream0_IRQn, 6, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream0_IRQn);
 
 }
 
