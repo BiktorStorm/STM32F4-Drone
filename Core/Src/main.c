@@ -18,7 +18,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "stm32f4xx_hal.h"
 #include "usb_device.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -28,6 +27,7 @@
 #include "mpu6050.h"
 #include <stdint.h>
 #include <stdio.h>
+#include "rc_recv.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -49,6 +49,9 @@
 I2C_HandleTypeDef hi2c1;
 DMA_HandleTypeDef hdma_i2c1_rx;
 
+UART_HandleTypeDef huart2;
+DMA_HandleTypeDef hdma_usart2_rx;
+
 /* USER CODE BEGIN PV */
 uint8_t *acc;
 static HAL_StatusTypeDef status = HAL_OK;
@@ -61,6 +64,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_I2C1_Init(void);
+static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -102,6 +106,7 @@ int main(void)
   MX_DMA_Init();
   MX_USB_DEVICE_Init();
   MX_I2C1_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
   int16_t acc_X = 0;
   int16_t acc_Y = 0;
@@ -114,11 +119,10 @@ int main(void)
   
   
   mpu6050_init(&status);
-  	  if(status == HAL_OK){
-      uint8_t succes_msg[] = "Init success\n";
-      CDC_Transmit_FS(succes_msg, sizeof(succes_msg));
-	  }
-  
+
+  ibus_init();
+  uint16_t channels[CHANNEL_COUNT];
+    
 
   /* USER CODE END 2 */
 
@@ -126,36 +130,16 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    if(!mpu6050_is_busy() && !mpu6050_ready()) {
-      mpu6050_read_DMA_start(&status);
-    }
-    
-    if(mpu6050_ready()) {
-      mpu6050_clear_ready();
-      const uint8_t *buffer = mpu6050_raw_data(); //temperature available at indeces: 6 and 7
-      acc_X = (int16_t)((buffer[0] << 8) | (buffer[1]));
-      acc_Y = (int16_t)((buffer[2] << 8) | (buffer[3]));
-      acc_Z = (int16_t)((buffer[4] << 8) | (buffer[5]));
+    ibus_dma_poll();
 
-      gyro_X = (int16_t)((buffer[8] << 8) | (buffer[9]));
-      gyro_Y = (int16_t)((buffer[10] << 8) | (buffer[11]));
-      gyro_Z = (int16_t)((buffer[12] << 8) | (buffer[13]));
-      
-      if(status == HAL_OK) {
-        char cdc_buf[64];
-        int len = snprintf(cdc_buf, sizeof(cdc_buf), "ACC: X =%d Y=%d Z=%d\r\n Gyro: X =%d Y=%d Z=%d\r\n", acc_X, acc_Y, acc_Z, gyro_X, gyro_Y, gyro_Z);
-        if(len > 0){
-          if (len > sizeof(cdc_buf)) {
-            len = sizeof(cdc_buf);  
-          }
-          // CDC_Transmit_FS((uint8_t*)cdc_buf, len);
-          while (CDC_Transmit_FS((uint8_t*)cdc_buf, len) == USBD_BUSY) {
-            HAL_Delay(1);
-          }
-        }
-      }
+    if(ibus_read_channels(channels)) {
+      char cdc_buf[128];
+      int len = snprintf(cdc_buf, sizeof(cdc_buf), "CH1 = %d\r\n CH2 = %d\r\n CH3 = %d\r\n CH4 = %d\r\n CH5 = %d\r\n CH6 = %d\r\n", 
+      channels[0], channels[1], channels[2], channels[3], channels[4], channels[5]);
+      CDC_Transmit_FS((uint8_t*)cdc_buf, len);
     }
-        /* USER CODE END WHILE */
+    HAL_Delay(10);
+    /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
   }
@@ -242,6 +226,39 @@ static void MX_I2C1_Init(void)
 }
 
 /**
+  * @brief USART2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART2_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART2_Init 0 */
+
+  /* USER CODE END USART2_Init 0 */
+
+  /* USER CODE BEGIN USART2_Init 1 */
+
+  /* USER CODE END USART2_Init 1 */
+  huart2.Instance = USART2;
+  huart2.Init.BaudRate = 115200;
+  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.StopBits = UART_STOPBITS_1;
+  huart2.Init.Parity = UART_PARITY_NONE;
+  huart2.Init.Mode = UART_MODE_TX_RX;
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART2_Init 2 */
+
+  /* USER CODE END USART2_Init 2 */
+
+}
+
+/**
   * Enable DMA controller clock
   */
 static void MX_DMA_Init(void)
@@ -254,6 +271,9 @@ static void MX_DMA_Init(void)
   /* DMA1_Stream0_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Stream0_IRQn, 6, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream0_IRQn);
+  /* DMA1_Stream5_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream5_IRQn);
 
 }
 
