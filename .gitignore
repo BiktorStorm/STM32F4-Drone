@@ -1,5 +1,4 @@
 build/
-cmake/
 .vscode
 mx.scratch
 STM32F411XX_FLASH.ld

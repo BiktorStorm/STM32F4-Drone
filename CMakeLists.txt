@@ -47,6 +47,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     Core/Src/mpu6050.c
     Core/Src/rc_recv.c
+    Core/Src/motor_control.c
 )
 
 # Add include paths
