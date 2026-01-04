@@ -52,6 +52,7 @@ uint8_t mpu6050_ready(void);
 void mpu6050_clear_ready(void);
 const uint8_t* mpu6050_raw_data(void);
 uint8_t mpu6050_is_busy(void);
-
+void mpu6050_test(HAL_StatusTypeDef *status);
+void motor_control_init(void);
 
 #endif 

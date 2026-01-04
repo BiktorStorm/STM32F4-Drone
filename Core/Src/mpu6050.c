@@ -126,6 +126,45 @@ uint8_t mpu6050_read_INT_status(HAL_StatusTypeDef *status) {
   return data;
 }
 
+void mpu6050_test(HAL_StatusTypeDef *status){
+  int16_t acc_X = 0;
+  int16_t acc_Y = 0;
+  int16_t acc_Z = 0;
+  int16_t gyro_X = 0;
+  int16_t gyro_Y = 0;
+  int16_t gyro_Z = 0;
+  
+  if(!mpu6050_is_busy() && !mpu6050_ready()) {
+    mpu6050_read_DMA_start(status);
+  }
+  
+  if(mpu6050_ready()) {
+    mpu6050_clear_ready();
+    const uint8_t *buffer = mpu6050_raw_data(); //temperature available at indeces: 6 and 7
+    acc_X = (int16_t)((buffer[0] << 8) | (buffer[1]));
+    acc_Y = (int16_t)((buffer[2] << 8) | (buffer[3]));
+    acc_Z = (int16_t)((buffer[4] << 8) | (buffer[5]));
+
+    gyro_X = (int16_t)((buffer[8] << 8) | (buffer[9]));
+    gyro_Y = (int16_t)((buffer[10] << 8) | (buffer[11]));
+    gyro_Z = (int16_t)((buffer[12] << 8) | (buffer[13]));
+    
+    if(*status == HAL_OK) {
+      char cdc_buf[64];
+      int len = snprintf(cdc_buf, sizeof(cdc_buf), "ACC: X =%d Y=%d Z=%d\r\n Gyro: X =%d Y=%d Z=%d\r\n", acc_X, acc_Y, acc_Z, gyro_X, gyro_Y, gyro_Z);
+      if(len > 0){
+        if (len > sizeof(cdc_buf)) {
+          len = sizeof(cdc_buf);  
+        }
+        // CDC_Transmit_FS((uint8_t*)cdc_buf, len);
+        while (CDC_Transmit_FS((uint8_t*)cdc_buf, len) == USBD_BUSY) {
+          HAL_Delay(1);
+        }
+      }
+    }
+  } 
+}
+
 uint8_t mpu6050_ready(void) { return mpu_read_ready; }
 void mpu6050_clear_ready(void) { mpu_read_ready = 0; }
 const uint8_t* mpu6050_raw_data(void) { return mpu_raw; }
