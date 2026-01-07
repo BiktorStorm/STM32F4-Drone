@@ -17,7 +17,8 @@
 
 #define CHANNEL_CORRECTION 1
 
-void esc_set_us(uint16_t us);
+void esc_set_us(uint16_t us, uint32_t channel);
+void esc_set_us_ALL(uint16_t us);
 void dshot_send_value(uint16_t value_11bit);
 void esc_calibrate(void);
 void test_motor_channel(int channel);

@@ -7,26 +7,44 @@
 static uint32_t dshot_dma_buf[DSHOT_DMA_LEN];
 extern TIM_HandleTypeDef htim3;
 
-void esc_set_us(uint16_t us) {
-   if (us < 1000) us = 1000;
-   if (us > 2000) us = 2000;
-   __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, us);
+void esc_set_us(uint16_t us, uint32_t channel) {
+  if (us < 1000) us = 1000;
+  if (us > 2000) us = 2000;
+  __HAL_TIM_SET_COMPARE(&htim3, channel, us);
+}
+
+void esc_set_us_ALL(uint16_t us) {
+  if (us < 1000) us = 1000;
+  if (us > 2000) us = 2000;
+  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, us);
+  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, us);
+  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, us);
+  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_4, us);
 }
 
 void esc_calibrate(void){
     __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 2000);
+    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 2000);
+    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, 2000);
+    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_4, 2000);
     HAL_Delay(7000);
     __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 1000);
+    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 1000);
+    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, 1000);
+    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_4, 1000);
 }
 
 void motor_control_init(void) {
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4);
 }
 
 void test_motor_channel(int channel){
   if (channel < 0 || channel >= CHANNEL_COUNT) return;
   uint16_t* channels = print_channels();
-  esc_set_us(channels[channel-CHANNEL_CORRECTION]);
+  esc_set_us_ALL(channels[channel-CHANNEL_CORRECTION]);
 }
 
 static uint16_t dshot_make_packet(uint16_t value_11bit, uint8_t telemetry)
