@@ -104,6 +104,27 @@ uint8_t ibus_read_channels(uint16_t *out) {
     return 1;
 }
 
+uint8_t ibus_read_channels_struct(Rc_Input* rc_input) {
+    ibus_dma_poll();
+    uint16_t arr[CHANNEL_COUNT];
+    if (!ibus_frame_ready) return 0;
+    ibus_frame_ready = 0;
+
+    for(uint8_t ch = 0; ch < CHANNEL_COUNT; ch++) {
+        uint8_t lo = ibus_frame[2 + 2*ch];
+        uint8_t hi = ibus_frame[3 + 2*ch];
+        arr[ch] = (uint16_t) lo | ((uint16_t) hi << 8);
+    }
+    rc_input->roll = arr[0];
+    rc_input->pitch = arr[1];
+    rc_input->throttle = arr[2];
+    rc_input->yaw  =arr[3];
+    rc_input->armed = arr[4] > 1500;
+    rc_input->aux2 = arr[5];
+
+    return 1;
+}
+
 void ibus_init() {
     ibus_dma_last_pos = 0;
     ibus_index = 0;
