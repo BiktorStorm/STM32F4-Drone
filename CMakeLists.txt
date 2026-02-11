@@ -48,7 +48,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/mpu6050.c
     Core/Src/rc_recv.c
     Core/Src/motor_control.c
-    Core/Src/drone_control.c
+    Core/Src/control.c
 )
 
 # Add include paths

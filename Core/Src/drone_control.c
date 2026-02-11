@@ -7,6 +7,15 @@
 #include "stdbool.h"
 
 
+#define GYRO_LSB_PER_DPS 65.536f     //need to doublecheck value I have 500 DPS
+#define ACC_LSB_PER_G 8192.0f
+#define ESC_MIN_US 1000
+#define ESC_MAX_US 2000
+#define ESC_IDLE_US 1050
+#define ESC_TEST_MAX_US 1400   // SAFETY CAP for testing
+
+
+
 typedef struct {
     float m1, m2, m3, m4; // 0..1
 } motors_t;
@@ -216,7 +225,7 @@ void attitude_update_complementary(attitude_t *att,
 
 
 
-void control_update(float dt, HAL_StatusTypeDef* status) {
+void wrong_control_update(float dt, HAL_StatusTypeDef* status) {
     bool new_sample = false;
     ibus_dma_poll();
     uint16_t channels[CHANNEL_COUNT];
