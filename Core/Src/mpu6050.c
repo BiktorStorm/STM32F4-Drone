@@ -144,7 +144,7 @@ void mpu6050_init(HAL_StatusTypeDef *status) {
   // return;
   // }
   gyro_calibrate(status);
-  acc_calibrate(status);
+  //acc_calibrate(status); --produces constant sensor misalignment
   
   *status = HAL_OK;
 }

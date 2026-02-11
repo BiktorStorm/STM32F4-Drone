@@ -19,7 +19,6 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32f4xx_hal.h"
-#include "stm32f4xx_hal_tim.h"
 #include "usb_device.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -106,9 +105,9 @@ int main(void)
     .armed    = false,
     .aux2     = 1000
 };
-  float pid_p_gain_roll = 1;               //Gain setting for the roll P-controller
-  float pid_i_gain_roll = 0;              //Gain setting for the roll I-controller
-  float pid_d_gain_roll = 0;              //Gain setting for the roll D-controller
+  float pid_p_gain_roll = 0.4;               //Gain setting for the roll P-controller
+  float pid_i_gain_roll = 0.005;              //Gain setting for the roll I-controller
+  float pid_d_gain_roll = 2;              //Gain setting for the roll D-controller
   int pid_max_roll = 400;                    //Maximum output of the PID-controller (+/-)
 
   float pid_p_gain_pitch = pid_p_gain_roll;  //Gain setting for the pitch P-controller.
@@ -116,8 +115,8 @@ int main(void)
   float pid_d_gain_pitch = pid_d_gain_roll;  //Gain setting for the pitch D-controller.
   int pid_max_pitch = pid_max_roll;          //Maximum output of the PID-controller (+/-)
 
-  float pid_p_gain_yaw = 1;                //Gain setting for the pitch P-controller. //4.0
-  float pid_i_gain_yaw = 0;               //Gain setting for the pitch I-controller. //0.02
+  float pid_p_gain_yaw = 2;                //Gain setting for the pitch P-controller. //4.0
+  float pid_i_gain_yaw = 0.02;               //Gain setting for the pitch I-controller. //0.02
   float pid_d_gain_yaw = 0;                //Gain setting for the pitch D-controller.
   int pid_max_yaw = 400;          
   float pid_i_mem_roll, pid_roll_setpoint, gyro_roll_input, pid_output_roll, pid_last_roll_d_error;
@@ -171,19 +170,19 @@ int main(void)
   ibus_init();
   HAL_TIM_Base_Start_IT(&htim2); //the PID loop timer on 500Hz refresh rate
   
-  // esc_calibrate(); I need to calibrate again after 7/01-26
-  uint8_t dont_go_into_if = 0;
+  // esc_calibrate(); 
+  
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    
-    /* USER CODE END WHILE */      
+    /* USER CODE END WHILE */
     /* USER CODE BEGIN 3 */
-    if(pid_timer_flag) { 
-      pid_timer_flag = 0;
+    
+    while(pid_timer_flag > 0) { 
+      pid_timer_flag--;
       mpu6050_read_raw(&status, &imu);
       ibus_read_channels_struct(&rc);
       imu.acc_x = ((float)imu.acc_x_raw / ACC_SENS) * GRAVITY;
@@ -223,7 +222,7 @@ int main(void)
         roll_level_adjust = 0;                                                  //Set the roll angle correcion to zero.
       }
       
-      if(rc.armed && prev_armed) {
+      if(rc.armed && !prev_armed) {
         angle_pitch = angle_pitch_acc;                                          //Set the gyro pitch angle equal to the accelerometer pitch angle when the quadcopter is started.
         angle_roll = angle_roll_acc;  
         
@@ -592,7 +591,7 @@ static void MX_GPIO_Init(void)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     if (htim->Instance == TIM2) {
-        pid_timer_flag = 1; // 500 Hz fixed dt (0.002 seconds)
+        pid_timer_flag++; // 500 Hz fixed dt (0.002 seconds)
     }
 }
 /* USER CODE END 4 */
