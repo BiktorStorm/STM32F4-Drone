@@ -20,7 +20,7 @@
 void esc_set_us(uint16_t us, uint32_t channel);
 void esc_set_us_ALL(uint16_t us);
 void esc_calibrate(void);
-void test_motor_channel(int channel);
+void test_motor_channel(int channel); //drives all motors depending on 1 input channel from the RC receiver
 void motor_control_init(void);
 void motors_set_us(uint16_t esc_1, uint16_t esc_2, uint16_t esc_3, uint16_t esc_4);
 uint16_t u16_max(uint16_t a, uint16_t b);

@@ -52,12 +52,12 @@
 #define GRAVITY   9.80665f
 
 typedef struct {
-    int16_t acc_x_raw;
-    int16_t acc_y_raw;
-    int16_t acc_z_raw;
-    int16_t gyro_x_raw;
-    int16_t gyro_y_raw;
-    int16_t gyro_z_raw;
+    float acc_x_raw;
+    float acc_y_raw;
+    float acc_z_raw;
+    float gyro_x_raw;
+    float gyro_y_raw;
+    float gyro_z_raw;
     float acc_x;
     float acc_y;
     float acc_z;
@@ -68,14 +68,10 @@ typedef struct {
 
 void mpu6050_init(HAL_StatusTypeDef *status);
 uint8_t *mpu6050_read_acc(HAL_StatusTypeDef *status);
-void mpu6050_read_DMA_start(HAL_StatusTypeDef *status);
-uint8_t mpu6050_read_INT_status(HAL_StatusTypeDef *status);
 uint8_t *mpu6050_read_gyro(HAL_StatusTypeDef *status);
-uint8_t mpu6050_ready(void);
-void mpu6050_clear_ready(void);
-const uint8_t* mpu6050_raw_data(void);
-uint8_t mpu6050_is_busy(void);
 void mpu6050_test(HAL_StatusTypeDef *status);
 void mpu6050_read_raw(HAL_StatusTypeDef *status, Imu* imu);
+void MPU6050_MemRxCpltCallback(I2C_HandleTypeDef *hi2c);
+void MPU6050_ErrorCallback(I2C_HandleTypeDef *hi2c);
 
 #endif 

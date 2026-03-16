@@ -1,6 +1,8 @@
 #include "mpu6050.h"
 #include <main.h>
 #include <stdint.h>
+#include "i2c.h"
+#include "stm32f4xx_hal.h"
 #include "stm32f4xx_hal_def.h"
 #include "stm32f4xx_hal_i2c.h"
 #include "usbd_cdc_if.h"    //Only here so that false error disappears with CDC_transmit_FS function
@@ -10,11 +12,30 @@ static uint8_t mpu_raw[14];
 
 static volatile uint8_t mpu_read_ready = 0;
 static volatile uint8_t mpu_busy = 0;
-volatile float acc_scale = 1;
 volatile int16_t gyro_error_X = 0;
 volatile int16_t gyro_error_Y = 0;
 volatile int16_t gyro_error_Z = 0;
+volatile int16_t acc_error_X = 0;
+volatile int16_t acc_error_Y = 0;
 extern I2C_HandleTypeDef hi2c1;
+
+uint8_t mpu6050_is_busy(void) { return mpu_busy; }
+uint8_t mpu6050_ready(void) { return mpu_read_ready; }
+void mpu6050_clear_ready(void) { mpu_read_ready = 0; }
+const uint8_t* mpu6050_raw_data(void) { return mpu_raw; }
+
+void mpu6050_read_DMA_start(HAL_StatusTypeDef *status) {
+  if(mpu_busy || I2C_Dispatch_GetOwner(&hi2c1) != I2C_OWNER_NONE) {
+    *status = HAL_BUSY;
+    return;
+  }
+  mpu_busy = 1;
+  mpu_read_ready = 0;
+
+  I2C_Dispatch_SetOwner(&hi2c1, I2C_OWNER_MPU6050);
+  
+  *status = HAL_I2C_Mem_Read_DMA(&hi2c1, MPU_DEVICE_ADDRESS , ACCEL_REG_BASE, I2C_MEMADD_SIZE_8BIT, mpu_raw, MPU_RAW_LEN);
+}
 
 void gyro_calibrate(HAL_StatusTypeDef *status) {
   uint16_t i = 0;
@@ -65,16 +86,14 @@ void acc_calibrate(HAL_StatusTypeDef *status) {
       i++;
     }
   }
-  const float ax_avg = (float)sum_X / (float)ACC_CALIB_SAMPLE_COUNT;
-  const float ay_avg = (float)sum_Y / (float)ACC_CALIB_SAMPLE_COUNT;
-  const float az_avg = (float)sum_Z / (float)ACC_CALIB_SAMPLE_COUNT;
-
-  const float mag = sqrtf(ax_avg * ax_avg + ay_avg * ay_avg + az_avg * az_avg);
-  acc_scale = FS_ACC / mag;
+  acc_error_X = sum_X / ACC_CALIB_SAMPLE_COUNT;
+  acc_error_Y = sum_Y / ACC_CALIB_SAMPLE_COUNT;
 }
 
 void mpu6050_init(HAL_StatusTypeDef *status) {
-  HAL_StatusTypeDef ret = HAL_I2C_IsDeviceReady(&hi2c1, MPU_DEVICE_ADDRESS, 1, 100);
+  HAL_StatusTypeDef ret;
+
+  ret = HAL_I2C_IsDeviceReady(&hi2c1, MPU_DEVICE_ADDRESS, 1, 100);
   if(ret == HAL_OK){
     uint8_t buffer[] = "MPU-6050 connected\n";
     CDC_Transmit_FS(buffer, sizeof(buffer));
@@ -84,7 +103,7 @@ void mpu6050_init(HAL_StatusTypeDef *status) {
     *status = HAL_ERROR;
     return;
   }
-  
+
   uint8_t temp_data = 0;
   ret = HAL_I2C_Mem_Write(&hi2c1, MPU_DEVICE_ADDRESS, PWR_MGMT1_REG, I2C_MEMADD_SIZE_8BIT, &temp_data, sizeof(temp_data), 100);
   if(ret == HAL_OK){
@@ -144,30 +163,21 @@ void mpu6050_init(HAL_StatusTypeDef *status) {
   // return;
   // }
   gyro_calibrate(status);
-  //acc_calibrate(status); --produces constant sensor misalignment
+  acc_calibrate(status); 
   
   *status = HAL_OK;
 }
 
-void mpu6050_read_DMA_start(HAL_StatusTypeDef *status) {
-  if(mpu_busy) {
-    *status = HAL_BUSY;
-    return;
-  }
-  mpu_busy = 1;
-  mpu_read_ready = 0;
-  
-  *status = HAL_I2C_Mem_Read_DMA(&hi2c1, MPU_DEVICE_ADDRESS , ACCEL_REG_BASE, I2C_MEMADD_SIZE_8BIT, mpu_raw, MPU_RAW_LEN);
-}
 
-void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c)
+
+void MPU6050_MemRxCpltCallback(I2C_HandleTypeDef *hi2c)
 {
     if (hi2c->Instance != hi2c1.Instance) return;
     mpu_busy = 0;
     mpu_read_ready = 1;
 }
 
-void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
+void MPU6050_ErrorCallback(I2C_HandleTypeDef *hi2c)
 {
     if (hi2c->Instance != hi2c1.Instance) return;
     mpu_busy = 0;
@@ -188,9 +198,9 @@ void mpu6050_read_raw(HAL_StatusTypeDef *status, Imu* imu) {
   if(mpu6050_ready()) {
     mpu6050_clear_ready();
     const uint8_t *buffer = mpu6050_raw_data(); //temperature available at indeces: 6 and 7
-    imu->acc_x_raw = (int16_t)((buffer[0] << 8) | (buffer[1])) * acc_scale;
-    imu->acc_y_raw = (int16_t)((buffer[2] << 8) | (buffer[3])) * acc_scale;
-    imu->acc_z_raw = (int16_t)((buffer[4] << 8) | (buffer[5])) * acc_scale;
+    imu->acc_x_raw = (int16_t)((buffer[0] << 8) | (buffer[1])) -acc_error_X;
+    imu->acc_y_raw = (int16_t)((buffer[2] << 8) | (buffer[3])) -acc_error_Y;
+    imu->acc_z_raw = (int16_t)((buffer[4] << 8) | (buffer[5]));
 
     imu->gyro_x_raw = ((int16_t)((buffer[8] << 8) | (buffer[9]))) - gyro_error_X;
     imu->gyro_y_raw = ((int16_t)((buffer[10] << 8) | (buffer[11]))) - gyro_error_Y;
@@ -214,9 +224,9 @@ void mpu6050_test(HAL_StatusTypeDef *status) {
   if(mpu6050_ready()) {
     mpu6050_clear_ready();
     const uint8_t *buffer = mpu6050_raw_data(); //temperature available at indeces: 6 and 7
-    acc_X = (int16_t)((buffer[0] << 8) | (buffer[1])) * acc_scale;
-    acc_Y = (int16_t)((buffer[2] << 8) | (buffer[3])) * acc_scale;
-    acc_Z = (int16_t)((buffer[4] << 8) | (buffer[5])) * acc_scale;
+    acc_X = (int16_t)((buffer[0] << 8) | (buffer[1])) - acc_error_X;
+    acc_Y = (int16_t)((buffer[2] << 8) | (buffer[3])) - acc_error_Y;
+    acc_Z = (int16_t)((buffer[4] << 8) | (buffer[5]));
 
     gyro_X = ((int16_t)((buffer[8] << 8) | (buffer[9]))) - gyro_error_X;
     gyro_Y = ((int16_t)((buffer[10] << 8) | (buffer[11]))) - gyro_error_Y;
@@ -240,8 +250,5 @@ void mpu6050_test(HAL_StatusTypeDef *status) {
 
 
 
-uint8_t mpu6050_ready(void) { return mpu_read_ready; }
-void mpu6050_clear_ready(void) { mpu_read_ready = 0; }
-const uint8_t* mpu6050_raw_data(void) { return mpu_raw; }
 
-uint8_t mpu6050_is_busy(void) { return mpu_busy; }
+

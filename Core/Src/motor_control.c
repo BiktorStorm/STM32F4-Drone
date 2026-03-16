@@ -48,7 +48,7 @@ void esc_calibrate(void){
     __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 2000);
     __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, 2000);
     __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_4, 2000);
-    HAL_Delay(6000);
+    HAL_Delay(8000);
     __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 1000);
     __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 1000);
     __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, 1000);

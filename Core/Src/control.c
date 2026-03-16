@@ -1,4 +1,5 @@
 #include "control.h"
+#include "bmp280.h"
 #include "mpu6050.h"
 #include "rc_recv.h"
 #include "motor_control.h"
@@ -7,11 +8,12 @@
 #include "stdbool.h"
 
 #define P 0.4f
-#define I 0.005f
+#define I 0.006f
 #define D 2
 
 
 Imu imu = {0};
+BMP bmp = {0};
 Rc_Input rc = {
     .roll     = 1500,
     .pitch    = 1500,
@@ -61,11 +63,11 @@ void control_update(float dt, HAL_StatusTypeDef *status){
     gyro_pitch_input = (gyro_pitch_input * 0.7) + (imu.gyro_x  * 0.3);//Gyro pid input is deg/sec.
     gyro_yaw_input = (gyro_yaw_input * 0.7) + (imu.gyro_z * 0.3);      //Gyro pid input is deg/sec.
 
-    angle_pitch += imu.gyro_x * DT;
-    angle_roll  += imu.gyro_y  * DT;
+    angle_pitch += imu.gyro_x * dt;
+    angle_roll  += imu.gyro_y  * dt;
 
-    angle_pitch -= angle_roll * sinf(imu.gyro_z * DT * DEG2RAD);
-    angle_roll  += angle_pitch * sinf(imu.gyro_z * DT * DEG2RAD);
+    angle_pitch -= angle_roll * sinf(imu.gyro_z * dt * DEG2RAD);
+    angle_roll  += angle_pitch * sinf(imu.gyro_z * dt * DEG2RAD);
 
     acc_total_vector = sqrtf((imu.acc_x*imu.acc_x)+(imu.acc_y*imu.acc_y)+(imu.acc_z*imu.acc_z));
 

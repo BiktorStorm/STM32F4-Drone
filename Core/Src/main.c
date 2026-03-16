@@ -33,6 +33,7 @@
 #include "motor_control.h"
 #include <math.h>
 #include "control.h"
+#include "bmp280.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -61,7 +62,6 @@ UART_HandleTypeDef huart2;
 DMA_HandleTypeDef hdma_usart2_rx;
 
 /* USER CODE BEGIN PV */
-static HAL_StatusTypeDef status = HAL_OK;
 volatile uint8_t pid_timer_flag = 0;
 /* USER CODE END PV */
 
@@ -90,7 +90,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
+  HAL_StatusTypeDef status = HAL_OK;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -118,29 +118,47 @@ int main(void)
   MX_TIM3_Init();
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
+  HAL_Delay(100);
   mpu6050_init(&status);
   	  if(status == HAL_OK){
       uint8_t succes_msg[] = "Init success\n";
       CDC_Transmit_FS(succes_msg, sizeof(succes_msg));
 	  }
+  bmp_init(&status);
+  
   motor_control_init();
-  ibus_init();
   HAL_TIM_Base_Start_IT(&htim2); //the PID loop timer on 500Hz refresh rate
-  
   // esc_calibrate(); 
-  
+
+  ibus_init();
+  BMP bmp = {0};
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    
     /* USER CODE END WHILE */
     /* USER CODE BEGIN 3 */
-    while(pid_timer_flag > 0) { 
-      pid_timer_flag--;
-      control_update(DT, &status);
-    }
+    HAL_Delay(300);
+    bmp_read(&status, &bmp);
+
+    char cdc_buf[64];
+        int len = snprintf(cdc_buf, sizeof(cdc_buf), "Pressure raw: %d Temp: %d\r\n", bmp.pressure, bmp.temp);
+            if(len > 0){
+                if (len > sizeof(cdc_buf)) {
+                len = sizeof(cdc_buf);  
+                }
+                while (CDC_Transmit_FS((uint8_t*)cdc_buf, len) == USBD_BUSY) {
+                HAL_Delay(1);
+                }
+            }
+
+    // while(pid_timer_flag > 0) { 
+    //   pid_timer_flag--;
+    //   control_update(DT, &status);
+    // }
   }
   /* USER CODE END 3 */
 }

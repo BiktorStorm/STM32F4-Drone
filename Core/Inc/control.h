@@ -5,9 +5,9 @@
 
 #define PID_LOOP_HZ 500
 #define DT (1.0f / (float)PID_LOOP_HZ)
-#define DEADBAND_UPPER 1510
-#define DEADBAND_LOWER 1490
-#define MAX_THROTTLE 1400
+#define DEADBAND_UPPER 1515
+#define DEADBAND_LOWER 1485
+#define MAX_THROTTLE 2000
 #define LEVEL_KP  15.0f
 #define MAX_ROLL_PITCH 400
 
