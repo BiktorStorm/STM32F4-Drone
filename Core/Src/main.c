@@ -26,6 +26,7 @@
 #include "stm32f4xx_hal_def.h"
 #include "usbd_cdc_if.h"
 #include "mpu6050.h"
+//#include <cstddef>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -34,6 +35,8 @@
 #include <math.h>
 #include "control.h"
 #include "bmp280.h"
+#include "qmc5883.h"
+#include "gps.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -57,12 +60,16 @@ DMA_HandleTypeDef hdma_i2c1_rx;
 
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
+TIM_HandleTypeDef htim4;
 
+UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
+DMA_HandleTypeDef hdma_usart1_rx;
 DMA_HandleTypeDef hdma_usart2_rx;
 
 /* USER CODE BEGIN PV */
 volatile uint8_t pid_timer_flag = 0;
+volatile uint8_t periph_poll_flag = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -73,6 +80,8 @@ static void MX_I2C1_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_TIM2_Init(void);
+static void MX_USART1_UART_Init(void);
+static void MX_TIM4_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -117,21 +126,34 @@ int main(void)
   MX_USART2_UART_Init();
   MX_TIM3_Init();
   MX_TIM2_Init();
+  MX_USART1_UART_Init();
+  MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
-  HAL_Delay(100);
+  HAL_Delay(200);
+
   mpu6050_init(&status);
-  	  if(status == HAL_OK){
-      uint8_t succes_msg[] = "Init success\n";
-      CDC_Transmit_FS(succes_msg, sizeof(succes_msg));
-	  }
   bmp_init(&status);
-  
+  qmc_init(&status);
   motor_control_init();
+
   HAL_TIM_Base_Start_IT(&htim2); //the PID loop timer on 500Hz refresh rate
+  HAL_TIM_Base_Start_IT(&htim4); //slow loop for GPS, qmc5883 and barometer
   // esc_calibrate(); 
 
   ibus_init();
-  BMP bmp = {0};
+  gps_init();
+  
+  Qmc qmc = {0};
+  Imu imu ={0};
+  Gps_Data gps_data = {0};
+  imu.acc_x = 0;
+  imu.acc_y = 0;
+  imu.acc_z = 9.8;
+  
+  
+
+  
+  
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -140,21 +162,34 @@ int main(void)
   {
     
     /* USER CODE END WHILE */
+
     /* USER CODE BEGIN 3 */
-    HAL_Delay(300);
-    bmp_read(&status, &bmp);
 
-    char cdc_buf[64];
-        int len = snprintf(cdc_buf, sizeof(cdc_buf), "Pressure raw: %d Temp: %d\r\n", bmp.pressure, bmp.temp);
-            if(len > 0){
-                if (len > sizeof(cdc_buf)) {
-                len = sizeof(cdc_buf);  
-                }
-                while (CDC_Transmit_FS((uint8_t*)cdc_buf, len) == USBD_BUSY) {
-                HAL_Delay(1);
-                }
-            }
+    qmc_read(&status, &qmc);
+    if (status != HAL_OK) {
+      uint8_t buf[] = "FAIL";
+      CDC_Transmit_FS(buf, sizeof(buf));
+    }
+    HAL_Delay(10);
+    uint16_t heading =(unsigned int) calculate_heading_degrees(imu, qmc);
 
+    char msg[128];
+
+        int len = snprintf(msg, sizeof(msg), "Heading: %d\r\n", heading);
+
+    CDC_Transmit_FS((uint8_t *)msg, len);
+
+    HAL_Delay(20);
+
+    // uint8_t buf[] = "waiting";
+    // CDC_Transmit_FS(buf, sizeof(buf));
+
+    
+    // if(periph_poll_flag > 0) {
+    //   periph_poll_flag = 0;
+    //   qmc_read(&status,&qmc);
+      
+    // }
     // while(pid_timer_flag > 0) { 
     //   pid_timer_flag--;
     //   control_update(DT, &status);
@@ -349,6 +384,84 @@ static void MX_TIM3_Init(void)
 }
 
 /**
+  * @brief TIM4 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM4_Init(void)
+{
+
+  /* USER CODE BEGIN TIM4_Init 0 */
+
+  /* USER CODE END TIM4_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM4_Init 1 */
+
+  /* USER CODE END TIM4_Init 1 */
+  htim4.Instance = TIM4;
+  htim4.Init.Prescaler = 9599;
+  htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim4.Init.Period = 499;
+  htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim4, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim4, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM4_Init 2 */
+
+  /* USER CODE END TIM4_Init 2 */
+
+}
+
+/**
+  * @brief USART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART1_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART1_Init 0 */
+
+  /* USER CODE END USART1_Init 0 */
+
+  /* USER CODE BEGIN USART1_Init 1 */
+
+  /* USER CODE END USART1_Init 1 */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 115200;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART1_Init 2 */
+
+  /* USER CODE END USART1_Init 2 */
+
+}
+
+/**
   * @brief USART2 Initialization Function
   * @param None
   * @retval None
@@ -389,6 +502,7 @@ static void MX_DMA_Init(void)
 
   /* DMA controller clock enable */
   __HAL_RCC_DMA1_CLK_ENABLE();
+  __HAL_RCC_DMA2_CLK_ENABLE();
 
   /* DMA interrupt init */
   /* DMA1_Stream0_IRQn interrupt configuration */
@@ -397,6 +511,9 @@ static void MX_DMA_Init(void)
   /* DMA1_Stream5_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream5_IRQn);
+  /* DMA2_Stream2_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream2_IRQn);
 
 }
 
@@ -426,7 +543,10 @@ static void MX_GPIO_Init(void)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     if (htim->Instance == TIM2) {
-        pid_timer_flag++; // 500 Hz fixed dt (0.002 seconds)
+      pid_timer_flag++; // 500 Hz fixed dt (0.002 seconds)
+    } 
+    else if (htim->Instance == TIM4) {
+      periph_poll_flag++;
     }
 }
 /* USER CODE END 4 */

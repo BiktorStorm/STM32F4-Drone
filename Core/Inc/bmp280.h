@@ -14,7 +14,6 @@ typedef struct{
 } BMP;
 
 
-
 typedef int32_t  BMP280_S32_t;
 typedef uint32_t BMP280_U32_t;
 extern I2C_HandleTypeDef hi2c1;

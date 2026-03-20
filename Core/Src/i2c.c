@@ -2,6 +2,7 @@
 #include "main.h"
 #include "mpu6050.h"
 #include "bmp280.h"
+#include "qmc5883.h"
 
 
 
@@ -40,6 +41,8 @@ void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c)
             BMP280_MemRxCpltCallback(hi2c);
             break;
 
+        case I2C_OWNER_QMC5883:
+            QMC5883_MemRxCpltCallback(hi2c);
         default:
             break;
     }
@@ -61,6 +64,8 @@ void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
             BMP280_ErrorCallback(hi2c);
             break;
 
+        case I2C_OWNER_QMC5883:
+            QMC5883_ErrorCallback(hi2c);
         default:
             break;
     }

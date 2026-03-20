@@ -1,5 +1,7 @@
 #include "control.h"
 #include "bmp280.h"
+#include "gps.h"
+#include "qmc5883.h"
 #include "mpu6050.h"
 #include "rc_recv.h"
 #include "motor_control.h"
@@ -11,9 +13,14 @@
 #define I 0.006f
 #define D 2
 
+extern double home_lat;
+extern double home_long;
 
 Imu imu = {0};
 BMP bmp = {0};
+Qmc qmc = {0};
+Gps_Data gps = {0};
+
 Rc_Input rc = {
     .roll     = 1500,
     .pitch    = 1500,
@@ -48,6 +55,8 @@ Rc_Input rc = {
   bool prev_armed = false;
 
   uint16_t esc_1 = 1000, esc_2 = 1000, esc_3 = 1000, esc_4 = 1000;
+
+
 
 void control_update(float dt, HAL_StatusTypeDef *status){
     
@@ -86,26 +95,26 @@ void control_update(float dt, HAL_StatusTypeDef *status){
     roll_level_adjust = angle_roll * LEVEL_KP;                                      //Calculate the roll angle correction
 
     if(!auto_level){                                                          //If the quadcopter is not in auto-level mode
-    pitch_level_adjust = 0;                                                 //Set the pitch angle correction to zero.
-    roll_level_adjust = 0;                                                  //Set the roll angle correcion to zero.
+        pitch_level_adjust = 0;                                                 //Set the pitch angle correction to zero.
+        roll_level_adjust = 0;                                                  //Set the roll angle correcion to zero.
     }
     
     if(rc.armed && !prev_armed) {
-    angle_pitch = angle_pitch_acc;                                          //Set the gyro pitch angle equal to the accelerometer pitch angle when the quadcopter is started.
-    angle_roll = angle_roll_acc;  
-    
-    pid_i_mem_roll = 0.0f;
-    pid_last_roll_d_error = 0.0f;
-    pid_i_mem_pitch = 0.0f;
-    pid_last_pitch_d_error = 0.0f;
-    pid_i_mem_yaw = 0.0f;
-    pid_last_yaw_d_error = 0.0f;
+        angle_pitch = angle_pitch_acc;                                          //Set the gyro pitch angle equal to the accelerometer pitch angle when the quadcopter is started.
+        angle_roll = angle_roll_acc;  
+        
+        pid_i_mem_roll = 0.0f;
+        pid_last_roll_d_error = 0.0f;
+        pid_i_mem_pitch = 0.0f;
+        pid_last_pitch_d_error = 0.0f;
+        pid_i_mem_yaw = 0.0f;
+        pid_last_yaw_d_error = 0.0f;
     }
     prev_armed = rc.armed;
 
     if (!rc.armed) {
-    esc_set_us_ALL(1000);
-    return;
+        esc_set_us_ALL(1000);
+        return;
     }
     pid_roll_setpoint = 0;
     if(rc.roll > DEADBAND_UPPER)
@@ -123,8 +132,8 @@ void control_update(float dt, HAL_StatusTypeDef *status){
 
     pid_yaw_setpoint = 0;
     if(rc.throttle > 1050){ //Do not yaw when turning off the motors.
-    if(rc.yaw > DEADBAND_UPPER)pid_yaw_setpoint = (rc.yaw - DEADBAND_UPPER)/3.0;
-    else if(rc.yaw < DEADBAND_LOWER)pid_yaw_setpoint = (rc.yaw - DEADBAND_LOWER)/3.0;
+        if(rc.yaw > DEADBAND_UPPER)pid_yaw_setpoint = (rc.yaw - DEADBAND_UPPER)/3.0;
+        else if(rc.yaw < DEADBAND_LOWER)pid_yaw_setpoint = (rc.yaw - DEADBAND_LOWER)/3.0;
     }
     //------------------------------------------------------------------------------------------------
     //------------------------------------------------------------------------------------------------

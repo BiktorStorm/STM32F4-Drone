@@ -52,6 +52,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/control.c
     Core/Src/bmp280.c
     Core/Src/i2c.c
+    Core/Src/qmc5883.c
+    Core/Src/gps.c
 )
 
 # Add include paths
