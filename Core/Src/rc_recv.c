@@ -120,7 +120,7 @@ uint8_t ibus_read_channels_struct(Rc_Input* rc_input) {
     rc_input->throttle = arr[2];
     rc_input->yaw  =arr[3];
     rc_input->armed = arr[4] > 1500;
-    rc_input->aux2 = arr[5];
+    rc_input->rth = arr[5] > 1500;
 
     return 1;
 }

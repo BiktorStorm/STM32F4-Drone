@@ -13,6 +13,18 @@
 #define LEVEL_KP  15.0f
 #define MAX_ROLL_PITCH 400
 
+
+//GPT RTH defines
+#define RTH_HOME_REACHED_M         2.5f
+#define RTH_START_BRAKE_M          8.0f
+
+#define RTH_YAW_KP                 2.0f
+#define RTH_MAX_YAW_RATE           90.0f      // deg/s command into yaw PID
+
+#define RTH_FORWARD_CMD_US         120.0f     // strong forward pitch command
+#define RTH_FORWARD_SLOW_CMD_US    70.0f      // slower when close to home
+#define RTH_YAW_ALIGN_DEG          20.0f      // only move forward if roughly pointed home
+
 void control_update(float dt, HAL_StatusTypeDef *status);
 
 

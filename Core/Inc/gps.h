@@ -1,6 +1,8 @@
 #ifndef GPS_H_
 #define GPS_H_
 
+#include "stdbool.h"
+
 #define GPS_DMA_BUF_SIZE   1024
 #define GPS_LINE_MAX_LEN   128
 
@@ -32,9 +34,15 @@ void gps_init(void);
 
 uint8_t gps_read(Gps_Data *gps_data);
 uint8_t gps_read_line(char *out);
+bool gps_coords_valid(double lat, double lon);
+float gps_bearing_deg(double lat1_deg, double lon1_deg, double lat2_deg, double lon2_deg);
+float gps_distance_m(double lat1_deg, double lon1_deg, double lat2_deg, double lon2_deg);
+void gps_test(void);
 
 uint8_t get_gps_line_ready(void);
 void clear_gps_line_ready(void);
+double get_home_lat(void);
+double get_home_long(void);
 
 extern UART_HandleTypeDef huart1;
 

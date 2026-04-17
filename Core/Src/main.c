@@ -99,7 +99,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-  HAL_StatusTypeDef status = HAL_OK;
+   HAL_StatusTypeDef status = HAL_OK;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -129,29 +129,20 @@ int main(void)
   MX_USART1_UART_Init();
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
-  HAL_Delay(200);
+  HAL_Delay(2000);
 
   mpu6050_init(&status);
+
   bmp_init(&status);
   qmc_init(&status);
   motor_control_init();
 
   HAL_TIM_Base_Start_IT(&htim2); //the PID loop timer on 500Hz refresh rate
   HAL_TIM_Base_Start_IT(&htim4); //slow loop for GPS, qmc5883 and barometer
-  // esc_calibrate(); 
+  // esc_calibrate();  // MAX speed for 8 seconds, then 3 seconds lowest speed 
 
   ibus_init();
-  gps_init();
-  
-  Qmc qmc = {0};
-  Imu imu ={0};
-  Gps_Data gps_data = {0};
-  imu.acc_x = 0;
-  imu.acc_y = 0;
-  imu.acc_z = 9.8;
-  
-  
-
+  // gps_init();
   
   
   /* USER CODE END 2 */
@@ -160,40 +151,20 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+
     
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
 
-    qmc_read(&status, &qmc);
-    if (status != HAL_OK) {
-      uint8_t buf[] = "FAIL";
-      CDC_Transmit_FS(buf, sizeof(buf));
+
+
+    while(pid_timer_flag > 0) { 
+      pid_timer_flag--;
+      control_update(DT, &status);
     }
-    HAL_Delay(10);
-    uint16_t heading =(unsigned int) calculate_heading_degrees(imu, qmc);
-
-    char msg[128];
-
-        int len = snprintf(msg, sizeof(msg), "Heading: %d\r\n", heading);
-
-    CDC_Transmit_FS((uint8_t *)msg, len);
-
-    HAL_Delay(20);
-
-    // uint8_t buf[] = "waiting";
-    // CDC_Transmit_FS(buf, sizeof(buf));
-
     
-    // if(periph_poll_flag > 0) {
-    //   periph_poll_flag = 0;
-    //   qmc_read(&status,&qmc);
-      
-    // }
-    // while(pid_timer_flag > 0) { 
-    //   pid_timer_flag--;
-    //   control_update(DT, &status);
-    // }
   }
   /* USER CODE END 3 */
 }

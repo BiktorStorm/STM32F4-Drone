@@ -53,6 +53,7 @@ void esc_calibrate(void){
     __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 1000);
     __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, 1000);
     __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_4, 1000);
+    HAL_Delay(3000);
 }
 
 void motor_control_init(void) {

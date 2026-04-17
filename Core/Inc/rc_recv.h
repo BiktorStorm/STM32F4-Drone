@@ -14,7 +14,7 @@ typedef struct {
     uint16_t throttle;
     uint16_t yaw;
     bool armed;
-    uint16_t aux2;
+    bool rth;
 
 } Rc_Input;
 

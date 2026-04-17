@@ -140,7 +140,18 @@ void mpu6050_init(HAL_StatusTypeDef *status) {
   return;
   }
 
-  
+  temp_data = 0x03;
+  ret = HAL_I2C_Mem_Write(&hi2c1, MPU_DEVICE_ADDRESS, REG_CONFIG, I2C_MEMADD_SIZE_8BIT, &temp_data, sizeof(temp_data), 100);
+  if(ret == HAL_OK){
+  uint8_t buffer[] = "LPF configured\n";
+  CDC_Transmit_FS(buffer, sizeof(buffer));
+  } else {
+  uint8_t buffer1[] = "Cannot configure LPF, returning form initialization\n";
+  CDC_Transmit_FS(buffer1, sizeof(buffer1));
+  *status = HAL_ERROR;
+  return;
+  }
+
   // temp_data = INT_RD_CLEAR;
   // ret = HAL_I2C_Mem_Write(&hi2c1, MPU_DEVICE_ADDRESS, REG_CONFIG_INT, I2C_MEMADD_SIZE_8BIT, &temp_data, sizeof(temp_data), 100);
   // if(ret == HAL_OK){
@@ -198,8 +209,8 @@ void mpu6050_read_raw(HAL_StatusTypeDef *status, Imu* imu) {
   if(mpu6050_ready()) {
     mpu6050_clear_ready();
     const uint8_t *buffer = mpu6050_raw_data(); //temperature available at indeces: 6 and 7
-    imu->acc_x_raw = (int16_t)((buffer[0] << 8) | (buffer[1])) -acc_error_X;
-    imu->acc_y_raw = (int16_t)((buffer[2] << 8) | (buffer[3])) -acc_error_Y;
+    imu->acc_x_raw = (int16_t)((buffer[0] << 8) | (buffer[1]));
+    imu->acc_y_raw = (int16_t)((buffer[2] << 8) | (buffer[3]));
     imu->acc_z_raw = (int16_t)((buffer[4] << 8) | (buffer[5]));
 
     imu->gyro_x_raw = ((int16_t)((buffer[8] << 8) | (buffer[9]))) - gyro_error_X;
@@ -246,6 +257,25 @@ void mpu6050_test(HAL_StatusTypeDef *status) {
       }
     }
   } 
+}
+
+void mpu6050_test_plot(HAL_StatusTypeDef *status, Imu *imu_test) {
+  
+  mpu6050_read_raw(status, imu_test);
+
+  HAL_Delay(10);
+
+  char cdc_buf[128];
+  int len = snprintf(cdc_buf, sizeof(cdc_buf), ">x_acc:%d,y_acc:%d,z_acc:%d,x_gyro:%d,y_gyro:%d,z_gyro:%d\r\n", (int16_t) imu_test->acc_x_raw, (int16_t)imu_test->acc_y_raw, (int16_t)imu_test->acc_z_raw, (int16_t)imu_test->gyro_x_raw, (int16_t)imu_test->gyro_y_raw, (int16_t)imu_test->gyro_z_raw);
+  
+  if(len > 0){
+    if (len > sizeof(cdc_buf)) {
+      len = sizeof(cdc_buf);  
+    }
+    while (CDC_Transmit_FS((uint8_t*)cdc_buf, len) == USBD_BUSY) {
+      HAL_Delay(1);
+    }
+  }
 }
 
 

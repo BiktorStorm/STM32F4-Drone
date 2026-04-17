@@ -2,6 +2,8 @@
 #include "main.h"
 #include "stm32f4xx_hal.h"
 #include "gps.h"
+#include "usbd_cdc_if.h"
+#include "mpu6050.h"
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -193,6 +195,35 @@ uint8_t gps_read(Gps_Data *gps_data) {
     return 1;
 }
 
+void gps_test(void) {
+    Gps_Data gps;
+
+    if (gps_read(&gps))
+    {
+        char msg[200];
+
+        int len = snprintf(msg, sizeof(msg),
+            "FIX:%d SAT:%d LAT:%d LON:%d ALT:%d\r\n",
+            gps.fix_quality,
+            gps.satellites,
+            (int)gps.latitude_deg,
+            (int)gps.longitude_deg,
+            (int)gps.altitude_m
+            
+        );
+
+        if(len > 0){
+        if (len > sizeof(msg)) {
+          len = sizeof(msg);  
+        }
+        // CDC_Transmit_FS((uint8_t*)cdc_buf, len);
+        while (CDC_Transmit_FS((uint8_t*)msg, len) == USBD_BUSY) {
+          HAL_Delay(1);
+        }
+      }
+    }
+}
+
 void gps_init(void) {
     gps_dma_last_pos = 0;
     gps_index = 0;
@@ -216,5 +247,49 @@ void gps_init(void) {
 
 }
 
+bool gps_coords_valid(double lat, double lon) {
+    if (lat > 90.0 || lat < -90.0) return false;
+    if (lon > 180.0 || lon < -180.0) return false;
+    if (lat == 0.0 && lon == 0.0) return false;
+    return true;
+}
+
+float gps_distance_m(double lat1_deg, double lon1_deg, double lat2_deg, double lon2_deg) {
+    const double R = 6371000.0; // Earth radius in meters
+
+    double lat1 = lat1_deg * DEG2RAD;
+    double lon1 = lon1_deg * DEG2RAD;
+    double lat2 = lat2_deg * DEG2RAD;
+    double lon2 = lon2_deg * DEG2RAD;
+
+    double dlat = lat2 - lat1;
+    double dlon = lon2 - lon1;
+
+    double a = sin(dlat * 0.5) * sin(dlat * 0.5) +
+               cos(lat1) * cos(lat2) *
+               sin(dlon * 0.5) * sin(dlon * 0.5);
+
+    double c = 2.0 * atan2(sqrt(a), sqrt(1.0 - a));
+    return (float)(R * c);
+}
+
+float gps_bearing_deg(double lat1_deg, double lon1_deg, double lat2_deg, double lon2_deg) {
+    double lat1 = lat1_deg * DEG2RAD;
+    double lon1 = lon1_deg * DEG2RAD;
+    double lat2 = lat2_deg * DEG2RAD;
+    double lon2 = lon2_deg * DEG2RAD;
+
+    double dlon = lon2 - lon1;
+
+    double y = sin(dlon) * cos(lat2);
+    double x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dlon);
+
+    double bearing = atan2(y, x) * RAD2DEG;   // -180..180
+    if (bearing < 0.0) bearing += 360.0;      // 0..360
+    return (float)bearing;
+}
+
+double get_home_lat(void) { return home_lat; }
+double get_home_long(void) { return home_long; }
 uint8_t get_gps_line_ready(void) { return gps_line_ready; }
 void clear_gps_line_ready(void) { gps_line_ready = 0; }

@@ -73,5 +73,6 @@ void mpu6050_test(HAL_StatusTypeDef *status);
 void mpu6050_read_raw(HAL_StatusTypeDef *status, Imu* imu);
 void MPU6050_MemRxCpltCallback(I2C_HandleTypeDef *hi2c);
 void MPU6050_ErrorCallback(I2C_HandleTypeDef *hi2c);
+void mpu6050_test_plot(HAL_StatusTypeDef *status, Imu *imu);
 
 #endif 

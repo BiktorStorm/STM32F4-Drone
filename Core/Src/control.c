@@ -9,9 +9,9 @@
 #include "math.h"
 #include "stdbool.h"
 
-#define P 0.4f
-#define I 0.006f
-#define D 2
+#define P 0.9f      //0.8, 0, 10, 1.2 causes oscillations => P = 0.6
+#define I 0.00f     //0.00125
+#define D 10.0f     // 10 is good, vibrations on 13
 
 extern double home_lat;
 extern double home_long;
@@ -27,7 +27,7 @@ Rc_Input rc = {
     .yaw      = 1500,
     .throttle = 1000,
     .armed    = false,
-    .aux2     = 1000
+    .rth     = false
 };
 
   float pid_p_gain_roll = P;               //Gain setting for the roll P-controller
@@ -41,7 +41,7 @@ Rc_Input rc = {
   int pid_max_pitch = MAX_ROLL_PITCH;          //Maximum output of the PID-controller (+/-)
 
   float pid_p_gain_yaw = 2.0f;                //Gain setting for the pitch P-controller. //4.0
-  float pid_i_gain_yaw = 0.02f;               //Gain setting for the pitch I-controller. //0.02
+  float pid_i_gain_yaw = 0.007f;               //Gain setting for the pitch I-controller. //0.02
   float pid_d_gain_yaw = 0.0f;                //Gain setting for the pitch D-controller.
   int pid_max_yaw = 400;          
   float pid_i_mem_roll = 0.0f, pid_roll_setpoint = 0.0f, gyro_roll_input = 0.0f, pid_output_roll = 0.0f, pid_last_roll_d_error = 0.0f;
@@ -56,12 +56,35 @@ Rc_Input rc = {
 
   uint16_t esc_1 = 1000, esc_2 = 1000, esc_3 = 1000, esc_4 = 1000;
 
+  float rth_distance_m = 0.0f;
+  float rth_bearing_deg = 0.0f;
+  float rth_heading_error_deg = 0.0f;
+  bool rth_active = false;
 
+
+
+static float wrap_180(float angle_deg) {
+    while (angle_deg > 180.0f) angle_deg -= 360.0f;
+    while (angle_deg < -180.0f) angle_deg += 360.0f;
+    return angle_deg;
+}
+
+
+
+float clampf_local(float d, float min, float max) {
+    const float t = d < min ? min : d;
+    return t > max ? max : t;
+}
 
 void control_update(float dt, HAL_StatusTypeDef *status){
     
     mpu6050_read_raw(status, &imu);
     ibus_read_channels_struct(&rc);
+    if(rc.rth) {
+        bmp_read(status, &bmp);
+        gps_read(&gps);
+        qmc_read(status, &qmc);
+    }
     imu.acc_x = ((float)imu.acc_x_raw / ACC_SENS) * GRAVITY;
     imu.acc_y = -((float)imu.acc_y_raw / ACC_SENS) * GRAVITY;
     imu.acc_z = ((float)imu.acc_z_raw / ACC_SENS) * GRAVITY;
@@ -112,10 +135,10 @@ void control_update(float dt, HAL_StatusTypeDef *status){
     }
     prev_armed = rc.armed;
 
-    if (!rc.armed) {
-        esc_set_us_ALL(1000);
-        return;
-    }
+    // if (!rc.armed) {
+    //     esc_set_us_ALL(1000);
+    //     return;
+    // }
     pid_roll_setpoint = 0;
     if(rc.roll > DEADBAND_UPPER)
         pid_roll_setpoint = rc.roll - DEADBAND_UPPER;
@@ -132,9 +155,47 @@ void control_update(float dt, HAL_StatusTypeDef *status){
 
     pid_yaw_setpoint = 0;
     if(rc.throttle > 1050){ //Do not yaw when turning off the motors.
-        if(rc.yaw > DEADBAND_UPPER)pid_yaw_setpoint = (rc.yaw - DEADBAND_UPPER)/3.0;
-        else if(rc.yaw < DEADBAND_LOWER)pid_yaw_setpoint = (rc.yaw - DEADBAND_LOWER)/3.0;
+        if(rc.yaw > DEADBAND_UPPER)pid_yaw_setpoint = (rc.yaw - DEADBAND_UPPER)/3.0f;
+        else if(rc.yaw < DEADBAND_LOWER)pid_yaw_setpoint = (rc.yaw - DEADBAND_LOWER)/3.0f;
     }
+
+    if(rc.rth && gps_coords_valid(home_lat, home_long) && gps_coords_valid(gps.latitude_deg, gps.longitude_deg)) {
+        rth_distance_m = gps_distance_m(gps.latitude_deg, gps.longitude_deg, home_lat, home_long);
+        rth_bearing_deg = gps_bearing_deg(gps.latitude_deg, gps.longitude_deg, home_lat, home_long);
+
+        float heading_deg = calculate_heading_degrees(imu, qmc);
+        rth_heading_error_deg = wrap_180(rth_bearing_deg - heading_deg);
+
+        //override setpoints
+        pid_yaw_setpoint = clampf_local(RTH_YAW_KP * rth_heading_error_deg,
+                                        -RTH_MAX_YAW_RATE,
+                                         RTH_MAX_YAW_RATE);
+        pid_roll_setpoint = -roll_level_adjust;
+        if (rth_distance_m > RTH_HOME_REACHED_M) {
+
+            float forward_cmd_us = 0.0f;
+
+            if (fabsf(rth_heading_error_deg) < RTH_YAW_ALIGN_DEG) {
+                if (rth_distance_m > RTH_START_BRAKE_M) {
+                    forward_cmd_us = RTH_FORWARD_CMD_US;
+                } else {
+                    forward_cmd_us = RTH_FORWARD_SLOW_CMD_US;
+                }
+            } else {
+                forward_cmd_us = 0.0f; // first rotate toward home
+            }
+
+            // Convert “virtual stick deflection” to your existing pitch-rate setpoint structure
+            pid_pitch_setpoint = (forward_cmd_us / 3.0f) - pitch_level_adjust;      //might be a problem, maybe need to change forward_cmd_us values
+        }
+        else {
+                // We are basically home: stop moving forward and stop yawing
+                pid_pitch_setpoint = -pitch_level_adjust;
+                pid_yaw_setpoint = 0.0f;
+                pid_roll_setpoint = -roll_level_adjust;
+        }
+    }
+
     //------------------------------------------------------------------------------------------------
     //------------------------------------------------------------------------------------------------
     //calculate the PID values
@@ -177,27 +238,27 @@ void control_update(float dt, HAL_StatusTypeDef *status){
     //end PID value calculation
     
     if(rc.armed) {
-    if (rc.throttle > MAX_THROTTLE) rc.throttle = MAX_THROTTLE;
-    esc_1 = rc.throttle - pid_output_pitch + pid_output_roll - pid_output_yaw; //Calculate the pulse for esc 1 (front-right - CCW)
-    esc_2 = rc.throttle + pid_output_pitch + pid_output_roll + pid_output_yaw; //Calculate the pulse for esc 2 (rear-right - CW)
-    esc_3 = rc.throttle + pid_output_pitch - pid_output_roll - pid_output_yaw; //Calculate the pulse for esc 3 (rear-left - CCW)
-    esc_4 = rc.throttle - pid_output_pitch - pid_output_roll + pid_output_yaw; //Calculate the pulse for esc 4 (front-left - CW)
+        if (rc.throttle > MAX_THROTTLE) rc.throttle = MAX_THROTTLE;
+        esc_1 = rc.throttle - pid_output_pitch + pid_output_roll + pid_output_yaw; //Calculate the pulse for esc 1 (front-right - CW)
+        esc_2 = rc.throttle + pid_output_pitch + pid_output_roll - pid_output_yaw; //Calculate the pulse for esc 2 (rear-right - CCW)
+        esc_3 = rc.throttle + pid_output_pitch - pid_output_roll + pid_output_yaw; //Calculate the pulse for esc 3 (rear-left - CW)
+        esc_4 = rc.throttle - pid_output_pitch - pid_output_roll - pid_output_yaw; //Calculate the pulse for esc 4 (front-left - CCW)
 
-    // if (battery_voltage < 1240 && battery_voltage > 800){                   //Is the battery connected?
-    //   esc_1 += esc_1 * ((1240 - battery_voltage)/(float)3500);              //Compensate the esc-1 pulse for voltage drop.
-    //   esc_2 += esc_2 * ((1240 - battery_voltage)/(float)3500);              //Compensate the esc-2 pulse for voltage drop.
-    //   esc_3 += esc_3 * ((1240 - battery_voltage)/(float)3500);              //Compensate the esc-3 pulse for voltage drop.
-    //   esc_4 += esc_4 * ((1240 - battery_voltage)/(float)3500);              //Compensate the esc-4 pulse for voltage drop.
-    // } 
-    if (esc_1 < 1100) esc_1 = 1100;                                         //Keep the motors running.
-    if (esc_2 < 1100) esc_2 = 1100;                                         //Keep the motors running.
-    if (esc_3 < 1100) esc_3 = 1100;                                         //Keep the motors running.
-    if (esc_4 < 1100) esc_4 = 1100;                                         //Keep the motors running.
-    } else {
-    esc_1 = 1000;
-    esc_2 = 1000;
-    esc_3 = 1000;
-    esc_4 = 1000;
+        // if (battery_voltage < 1240 && battery_voltage > 800){                   //Is the battery connected?
+        //   esc_1 += esc_1 * ((1240 - battery_voltage)/(float)3500);              //Compensate the esc-1 pulse for voltage drop.
+        //   esc_2 += esc_2 * ((1240 - battery_voltage)/(float)3500);              //Compensate the esc-2 pulse for voltage drop.
+        //   esc_3 += esc_3 * ((1240 - battery_voltage)/(float)3500);              //Compensate the esc-3 pulse for voltage drop.
+        //   esc_4 += esc_4 * ((1240 - battery_voltage)/(float)3500);              //Compensate the esc-4 pulse for voltage drop.
+        // } 
+        if (esc_1 < 1100) esc_1 = 1100;                                         //Keep the motors running.
+        if (esc_2 < 1100) esc_2 = 1100;                                         //Keep the motors running.
+        if (esc_3 < 1100) esc_3 = 1100;                                         //Keep the motors running.
+        if (esc_4 < 1100) esc_4 = 1100;                                         //Keep the motors running.
+        } else {
+        esc_1 = 1000;
+        esc_2 = 1000;
+        esc_3 = 1000;
+        esc_4 = 1000;
     }
     motors_set_us(esc_1, esc_2, esc_3, esc_4);  
 }
