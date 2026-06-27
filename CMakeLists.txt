@@ -19,7 +19,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Set the project name
-set(CMAKE_PROJECT_NAME virtual_com)
+set(CMAKE_PROJECT_NAME flight_controller)
 
 # Enable compile command to ease indexing with e.g. clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
@@ -46,14 +46,14 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     Core/Src/bmp280.c
-    Core/Src/mpu6050.c
-    Core/Src/rc_recv.c
-    Core/Src/motor_control.c
     Core/Src/control.c
-    Core/Src/bmp280.c
-    Core/Src/i2c.c
-    Core/Src/qmc5883.c
+    Core/Src/drone_control.c
     Core/Src/gps.c
+    Core/Src/i2c.c
+    Core/Src/motor_control.c
+    Core/Src/mpu6050.c
+    Core/Src/qmc5883.c
+    Core/Src/rc_recv.c
 )
 
 # Add include paths

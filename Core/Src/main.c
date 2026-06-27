@@ -18,7 +18,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "stm32f4xx_hal.h"
 #include "usb_device.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -98,8 +97,9 @@ static void MX_TIM4_Init(void);
 int main(void)
 {
 
+
   /* USER CODE BEGIN 1 */
-   HAL_StatusTypeDef status = HAL_OK;
+  HAL_StatusTypeDef status = HAL_OK;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -129,42 +129,57 @@ int main(void)
   MX_USART1_UART_Init();
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
-  HAL_Delay(2000);
+  HAL_Delay(2000); 
 
   mpu6050_init(&status);
 
   bmp_init(&status);
   qmc_init(&status);
-  motor_control_init();
 
-  HAL_TIM_Base_Start_IT(&htim2); //the PID loop timer on 500Hz refresh rate
-  HAL_TIM_Base_Start_IT(&htim4); //slow loop for GPS, qmc5883 and barometer
+  motor_control_init();
+  ibus_init();
+  // qmc_calibrate(&status, 200);  //calibrate for 10 seconds, make sure to rotate the drone in all orientations during this time
+
+  // gps_init();
   // esc_calibrate();  // MAX speed for 8 seconds, then 3 seconds lowest speed 
 
-  ibus_init();
-  // gps_init();
-  
-  
+
+  HAL_TIM_Base_Start_IT(&htim2); //the PID loop timer on 500Hz refresh rate
+  HAL_TIM_Base_Start_IT(&htim4); //slow loop for GPS, qmc5883 and bmp280
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-
-    
-
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
 
+    // gps_test();
+    // HAL_Delay(100);
+    // qmc_test();
+    // HAL_Delay(100);
+    mpu6050_test(&status);
+    HAL_Delay(300);
+    bmp_test(&status);
+    HAL_Delay(300);
 
+    uint8_t msg[8] = "HELLO\r\n";
+    CDC_Transmit_FS(msg, 8);
 
-    while(pid_timer_flag > 0) { 
-      pid_timer_flag--;
-      control_update(DT, &status);
-    }
-    
+    HAL_Delay(100);
+
+    // if(pid_timer_flag && periph_poll_flag) { 
+    //   pid_timer_flag = 0;
+    //   periph_poll_flag = 0;
+    //   control_update(DT, &status, PERIPH_READY);
+    // }
+    // else if(pid_timer_flag) {
+    //   pid_timer_flag = 0;
+    //   control_update(DT, &status, PERIPH_NOT_READY);
+    // }
   }
   /* USER CODE END 3 */
 }
@@ -314,7 +329,7 @@ static void MX_TIM3_Init(void)
   htim3.Instance = TIM3;
   htim3.Init.Prescaler = 95;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 19999;
+  htim3.Init.Period = 499;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
@@ -328,7 +343,7 @@ static void MX_TIM3_Init(void)
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 1000;
+  sConfigOC.Pulse = 125;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
@@ -514,10 +529,10 @@ static void MX_GPIO_Init(void)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     if (htim->Instance == TIM2) {
-      pid_timer_flag++; // 500 Hz fixed dt (0.002 seconds)
+      pid_timer_flag = 1; // 500 Hz fixed dt (0.002 seconds)
     } 
     else if (htim->Instance == TIM4) {
-      periph_poll_flag++;
+      periph_poll_flag = 1;
     }
 }
 /* USER CODE END 4 */

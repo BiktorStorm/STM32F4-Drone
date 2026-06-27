@@ -174,7 +174,7 @@ void mpu6050_init(HAL_StatusTypeDef *status) {
   // return;
   // }
   gyro_calibrate(status);
-  acc_calibrate(status); 
+  // acc_calibrate(status); 
   
   *status = HAL_OK;
 }
@@ -201,23 +201,31 @@ uint8_t mpu6050_read_INT_status(HAL_StatusTypeDef *status) {
   return data;
 }
 
-void mpu6050_read_raw(HAL_StatusTypeDef *status, Imu* imu) {
-  if(!mpu6050_is_busy() && !mpu6050_ready()) {
-    mpu6050_read_DMA_start(status);
-  }
-  
+uint8_t mpu6050_read_raw(HAL_StatusTypeDef *status, Imu* imu) {
+  uint8_t new_sample = 0;
+
   if(mpu6050_ready()) {
     mpu6050_clear_ready();
     const uint8_t *buffer = mpu6050_raw_data(); //temperature available at indeces: 6 and 7
-    imu->acc_x_raw = (int16_t)((buffer[0] << 8) | (buffer[1]));
-    imu->acc_y_raw = (int16_t)((buffer[2] << 8) | (buffer[3]));
+    imu->acc_x_raw = (int16_t)((buffer[0] << 8) | (buffer[1])) - acc_error_X;
+    imu->acc_y_raw = (int16_t)((buffer[2] << 8) | (buffer[3])) - acc_error_Y; 
     imu->acc_z_raw = (int16_t)((buffer[4] << 8) | (buffer[5]));
 
     imu->gyro_x_raw = ((int16_t)((buffer[8] << 8) | (buffer[9]))) - gyro_error_X;
     imu->gyro_y_raw = ((int16_t)((buffer[10] << 8) | (buffer[11]))) - gyro_error_Y;
     imu->gyro_z_raw = ((int16_t)((buffer[12] << 8) | (buffer[13]))) - gyro_error_Z;
-  } 
+    new_sample = 1;
+  }
 
+  /*
+   * Keep MPU reads pipelined: after consuming a ready sample (or at startup),
+   * immediately queue the next DMA read when the bus is free.
+   */
+  if(!mpu6050_is_busy() && !mpu6050_ready()) {
+    mpu6050_read_DMA_start(status);
+  }
+
+  return new_sample;
 }
 
 void mpu6050_test(HAL_StatusTypeDef *status) {
@@ -263,7 +271,7 @@ void mpu6050_test_plot(HAL_StatusTypeDef *status, Imu *imu_test) {
   
   mpu6050_read_raw(status, imu_test);
 
-  HAL_Delay(10);
+  
 
   char cdc_buf[128];
   int len = snprintf(cdc_buf, sizeof(cdc_buf), ">x_acc:%d,y_acc:%d,z_acc:%d,x_gyro:%d,y_gyro:%d,z_gyro:%d\r\n", (int16_t) imu_test->acc_x_raw, (int16_t)imu_test->acc_y_raw, (int16_t)imu_test->acc_z_raw, (int16_t)imu_test->gyro_x_raw, (int16_t)imu_test->gyro_y_raw, (int16_t)imu_test->gyro_z_raw);
@@ -276,9 +284,8 @@ void mpu6050_test_plot(HAL_StatusTypeDef *status, Imu *imu_test) {
       HAL_Delay(1);
     }
   }
+  HAL_Delay(10);
 }
-
-
 
 
 

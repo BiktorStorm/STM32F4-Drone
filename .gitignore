@@ -5,3 +5,4 @@ mx.scratch
 STM32F411XX_FLASH.ld
 .clangd
 !.settings
+.meteadata

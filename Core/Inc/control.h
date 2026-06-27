@@ -24,8 +24,20 @@
 #define RTH_FORWARD_CMD_US         120.0f     // strong forward pitch command
 #define RTH_FORWARD_SLOW_CMD_US    70.0f      // slower when close to home
 #define RTH_YAW_ALIGN_DEG          20.0f      // only move forward if roughly pointed home
+#define RTH_CLIMB_ALTITUDE_M       120.0f
+#define RTH_ALTITUDE_TOLERANCE_M   3.0f
+#define RTH_HOME_ELEVATION_TOL_M   2.0f
+#define RTH_CLIMB_THROTTLE_BOOST   140.0f
+#define RTH_DESCEND_THROTTLE_REDUCE 80.0f
+#define RTH_ALT_HOLD_KP_US_PER_M   4.0f
+#define RTH_ALT_HOLD_MAX_CORR_US   120.0f
 
-void control_update(float dt, HAL_StatusTypeDef *status);
+typedef enum {
+    PERIPH_READY = 1,
+    PERIPH_NOT_READY = 0
+} Periph_status;
+
+void control_update(float dt, HAL_StatusTypeDef *status, Periph_status periph_status);
 
 
 #endif

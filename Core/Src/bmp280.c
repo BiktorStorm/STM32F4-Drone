@@ -5,6 +5,7 @@
 #include "stm32f4xx_hal.h"
 #include "stm32f4xx_hal_def.h"
 #include "usbd_cdc_if.h"
+#include "math.h"
 
 typedef struct
 {
@@ -29,6 +30,8 @@ static int32_t t_fine;
 
 static volatile uint8_t bmp_read_ready = 0;
 static volatile uint8_t bmp_busy = 0;
+
+volatile float home_elevation = 0;
 
 void bmp280_read_DMA_start(HAL_StatusTypeDef *status) {
   if(bmp_busy || I2C_Dispatch_GetOwner(&hi2c1) != I2C_OWNER_NONE) {
@@ -102,6 +105,26 @@ uint32_t bmp280_compensate_P_int32(int32_t adc_P)
     return p;
 }
 
+void bmp_compute(BMP *bmp)
+{
+    if (bmp == NULL) {
+        return;
+    }
+    /* Temperature compensation must run first because it updates t_fine. */
+    int32_t temp_x100_c = bmp280_compensate_T_int32(bmp->temp_raw);
+    uint32_t pressure_pa = bmp280_compensate_P_int32((int32_t)bmp->pressure_raw);
+
+    bmp->temp = (float)temp_x100_c / 100.0f;      /* degC */
+    bmp->pressure = (float)pressure_pa / 100.0f;  /* hPa */
+}
+
+float bmp_get_elevation_asl_m(const BMP *bmp) {
+    if (bmp == NULL || bmp->pressure <= 0.0f) {
+        return 0.0f;
+    }
+    return 44330.0f * (1.0f - powf(bmp->pressure / BMP_SEA_LEVEL_PRESSURE_PA, 0.1903f));
+}
+
 
 void bmp_read(HAL_StatusTypeDef *status, BMP *bmp) {
     if(bmp_busy == 0 && bmp_read_ready == 0) {
@@ -111,14 +134,9 @@ void bmp_read(HAL_StatusTypeDef *status, BMP *bmp) {
     if(bmp_read_ready) {
         bmp_read_ready = 0;
         
-        int32_t adc_P = ((int32_t)bmp_raw[0] << 12) | ((int32_t)bmp_raw[1] << 4) | (bmp_raw[2] >> 4);
-        int32_t adc_T = ((int32_t)bmp_raw[3] << 12) | ((int32_t)bmp_raw[4] << 4) | (bmp_raw[5] >> 4);
-
-        uint32_t press = (uint32_t) bmp280_compensate_P_int32(adc_P);
-        int32_t temp = (int32_t) bmp280_compensate_T_int32(adc_T);
-
-        bmp->pressure = press;
-        bmp->temp = temp;
+        bmp->pressure_raw = ((uint32_t)bmp_raw[0] << 12) | ((uint32_t)bmp_raw[1] << 4) | (bmp_raw[2] >> 4);
+        bmp->temp_raw = ((int32_t)bmp_raw[3] << 12) | ((int32_t)bmp_raw[4] << 4) | (bmp_raw[5] >> 4);
+        bmp_compute(bmp);
     }
 }
 
@@ -151,6 +169,23 @@ void bmp_test(HAL_StatusTypeDef *status){
             }
        }
     }
+}
+
+void bmp_test_plot(HAL_StatusTypeDef *status,BMP bmp) {
+    bmp_read(status, &bmp);
+    
+    char cdc_buf[64];
+    int len = snprintf(cdc_buf, sizeof(cdc_buf), ">pressure:%d,temp: %d\r\n", (int) bmp.pressure, (int) bmp.temp);
+      if(len > 0){
+        if (len > sizeof(cdc_buf)) {
+        len = sizeof(cdc_buf);  
+        }
+        while (CDC_Transmit_FS((uint8_t*)cdc_buf, len) == USBD_BUSY) {
+        HAL_Delay(1);
+        }
+     }
+
+    HAL_Delay(10);
 }
 
 
@@ -193,10 +228,45 @@ void bmp_init(HAL_StatusTypeDef *status) {
     HAL_I2C_Mem_Write(&hi2c1, 0b11101110, 0xF4, I2C_MEMADD_SIZE_8BIT, &ctrl_meas, 1, 100);
 
     HAL_Delay(10);
+
     BMP280_ReadCalibration();
-    
+
+    BMP bmp_tmp = {0};
+
+    uint32_t tot_press_raw = 0;
+
+    if(bmp_busy == 0 && bmp_read_ready == 0) {
+    bmp280_read_DMA_start(status);
+    }
+    HAL_Delay(10);
+
+    if(bmp_read_ready) {
+        bmp_read_ready = 0;
+        
+        bmp_tmp.pressure_raw = ((uint32_t)bmp_raw[0] << 12) | ((uint32_t)bmp_raw[1] << 4) | (bmp_raw[2] >> 4);
+        bmp_tmp.temp_raw = ((int32_t)bmp_raw[3] << 12) | ((int32_t)bmp_raw[4] << 4) | (bmp_raw[5] >> 4);
+        bmp_compute(&bmp_tmp);
+    }
+   
+    for(int i = 0; i < 10; i++) {
+        bmp_read(status, &bmp_tmp);
+        tot_press_raw += bmp_tmp.pressure_raw;
+        HAL_Delay(5);
+    }
+
+    bmp_tmp.pressure_raw = tot_press_raw / 10;
+    bmp_compute(&bmp_tmp);
+    home_elevation = bmp_get_elevation_asl_m(&bmp_tmp);
     return;
 }
+
+void bmp_update_home_elevation(HAL_StatusTypeDef *status, BMP *bmp) {
+    bmp_read(status, bmp);
+    HAL_Delay(2);
+    home_elevation = bmp_get_elevation_asl_m(bmp);
+}
+
+
 
 void BMP280_MemRxCpltCallback(I2C_HandleTypeDef *hi2c) {
     bmp_busy = 0;
@@ -209,4 +279,3 @@ void BMP280_ErrorCallback(I2C_HandleTypeDef *hi2c) {
     bmp_read_ready = 0;
     return;
 }
-

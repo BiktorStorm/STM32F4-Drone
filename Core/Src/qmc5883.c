@@ -8,6 +8,7 @@
 #include <string.h>
 #include "usbd_cdc_if.h"
 #include <stdio.h>
+#include <limits.h>
 
 
 
@@ -16,26 +17,14 @@ static uint8_t qmc_raw[6];
 static volatile uint8_t qmc_read_ready = 0;
 static volatile uint8_t qmc_busy = 0;
 
-Cal cal = {0};
-
-
-void qmc_init(HAL_StatusTypeDef *status)
-{
-    *status = HAL_I2C_IsDeviceReady(&hi2c1, QMC_DEVICE_ADDRESS, 3, 50);
-    if (*status != HAL_OK) return;
-    
-    uint8_t setrst = 0x01;
-    *status = HAL_I2C_Mem_Write(&hi2c1, QMC_DEVICE_ADDRESS, 0x0B, I2C_MEMADD_SIZE_8BIT, &setrst, 1, 100);
-    if (*status != HAL_OK) return;
-    
-    uint8_t ctrl1 = 0x0D;   // OSR=512, RNG=8G, ODR=50Hz, MODE=continuous
-    *status = HAL_I2C_Mem_Write(&hi2c1, QMC_DEVICE_ADDRESS, 0x09, I2C_MEMADD_SIZE_8BIT, &ctrl1, 1, 100);
-}
-uint8_t qmc_get_drdy(HAL_StatusTypeDef *status) {
-    uint8_t drdy;
-    *status = HAL_I2C_Mem_Read(&hi2c1, QMC_DEVICE_ADDRESS, 0x06, I2C_MEMADD_SIZE_8BIT, &drdy, 1, 100);    
-    return drdy;
-}
+Cal cal = {
+    .offset_x = 0.0f,
+    .offset_y = 0.0f,
+    .offset_z = 0.0f,
+    .scale_x = 1.0f,
+    .scale_y = 1.0f,
+    .scale_z = 1.0f
+};
 
 void qmc_read_DMA_start(HAL_StatusTypeDef *status) {
   if(qmc_busy || I2C_Dispatch_GetOwner(&hi2c1) != I2C_OWNER_NONE) {
@@ -50,14 +39,44 @@ void qmc_read_DMA_start(HAL_StatusTypeDef *status) {
   *status = HAL_I2C_Mem_Read_DMA(&hi2c1, QMC_DEVICE_ADDRESS , QMC_BASE_ADDR, I2C_MEMADD_SIZE_8BIT, qmc_raw, QMC_RAW_LEN);
 }
 
-void qmc_read(HAL_StatusTypeDef *status, Qmc *qmc) {
-    if(qmc_busy == 0 && qmc_read_ready == 0) {
-    qmc_read_DMA_start(status);
-    }
+void qmc_init(HAL_StatusTypeDef *status)
+{
+    cal.offset_x = 0.0f;
+    cal.offset_y = 0.0f;
+    cal.offset_z = 0.0f;
+    cal.scale_x = 1.0f;
+    cal.scale_y = 1.0f;
+    cal.scale_z = 1.0f;
 
-    if(qmc_read_ready) {
+    *status = HAL_I2C_IsDeviceReady(&hi2c1, QMC_DEVICE_ADDRESS, 3, 50);
+    if (*status != HAL_OK) return;
+    
+    uint8_t setrst = 0x01;
+    *status = HAL_I2C_Mem_Write(&hi2c1, QMC_DEVICE_ADDRESS, 0x0B, I2C_MEMADD_SIZE_8BIT, &setrst, 1, 100);
+    if (*status != HAL_OK) return;
+    
+    uint8_t ctrl1 = 0x0D;   // OSR=512, RNG=8G, ODR=50Hz, MODE=continuous
+    *status = HAL_I2C_Mem_Write(&hi2c1, QMC_DEVICE_ADDRESS, 0x09, I2C_MEMADD_SIZE_8BIT, &ctrl1, 1, 100);
+
+    
+    qmc_read_DMA_start(status);
+}
+uint8_t qmc_get_drdy(HAL_StatusTypeDef *status) {
+    uint8_t drdy;
+    *status = HAL_I2C_Mem_Read(&hi2c1, QMC_DEVICE_ADDRESS, 0x06, I2C_MEMADD_SIZE_8BIT, &drdy, 1, 100);    
+    return drdy;
+}
+
+
+
+uint8_t qmc_read_latest(HAL_StatusTypeDef *status, Qmc *qmc) {
+    HAL_StatusTypeDef local_status = HAL_OK;
+    uint8_t has_new_sample = 0;
+
+    if (qmc_read_ready) {
         qmc_read_ready = 0;
-        
+        has_new_sample = 1;
+
         qmc->mx_raw = (int16_t)((qmc_raw[1] << 8) | qmc_raw[0]);
         qmc->my_raw = (int16_t)((qmc_raw[3] << 8) | qmc_raw[2]);
         qmc->mz_raw = (int16_t)((qmc_raw[5] << 8) | qmc_raw[4]);
@@ -65,34 +84,118 @@ void qmc_read(HAL_StatusTypeDef *status, Qmc *qmc) {
         qmc->mx = ((float) qmc->mx_raw - cal.offset_x) * cal.scale_x;
         qmc->my = ((float) qmc->my_raw - cal.offset_y) * cal.scale_y;
         qmc->mz = ((float) qmc->mz_raw - cal.offset_z) * cal.scale_z;
-
     }
+
+    /*
+     * Keep DMA pipelined: whenever no transfer is active, start the next one.
+     * If another sensor currently owns I2C, qmc_read_DMA_start returns HAL_BUSY.
+     */
+    if (qmc_busy == 0) {
+        qmc_read_DMA_start(&local_status);
+    }
+
+    if (status != NULL) {
+        *status = local_status;
+    }
+
+    return has_new_sample;
+}
+
+void qmc_read(HAL_StatusTypeDef *status, Qmc *qmc) {
+    (void)qmc_read_latest(status, qmc);
+}
+
+uint8_t qmc_calibrate(HAL_StatusTypeDef *status, uint32_t duration_ms) {
+    HAL_StatusTypeDef local_status = HAL_OK;
+    Qmc sample = {0};
+    int16_t min_x = INT16_MAX, min_y = INT16_MAX, min_z = INT16_MAX;
+    int16_t max_x = INT16_MIN, max_y = INT16_MIN, max_z = INT16_MIN;
+    uint32_t start_tick = HAL_GetTick();
+    uint16_t sample_count = 0;
+
+    if (duration_ms < 2000U) {
+        duration_ms = 2000U;
+    }
+
+    while ((HAL_GetTick() - start_tick) < duration_ms) {
+        uint8_t has_new_sample = qmc_read_latest(&local_status, &sample);
+
+        if (local_status != HAL_OK && local_status != HAL_BUSY) {
+            if (status != NULL) {
+                *status = local_status;
+            }
+            return 0;
+        }
+
+        if (!has_new_sample) {
+            HAL_Delay(1);
+            continue;
+        }
+
+        if (sample.mx_raw < min_x) min_x = sample.mx_raw;
+        if (sample.mx_raw > max_x) max_x = sample.mx_raw;
+        if (sample.my_raw < min_y) min_y = sample.my_raw;
+        if (sample.my_raw > max_y) max_y = sample.my_raw;
+        if (sample.mz_raw < min_z) min_z = sample.mz_raw;
+        if (sample.mz_raw > max_z) max_z = sample.mz_raw;
+        sample_count++;
+    }
+
+    if (sample_count < 20U) {
+        if (status != NULL) {
+            *status = HAL_TIMEOUT;
+        }
+        return 0;
+    }
+
+    float radius_x = ((float)(max_x - min_x)) * 0.5f;
+    float radius_y = ((float)(max_y - min_y)) * 0.5f;
+    float radius_z = ((float)(max_z - min_z)) * 0.5f;
+
+    if (radius_x < 1.0f || radius_y < 1.0f || radius_z < 1.0f) {
+        if (status != NULL) {
+            *status = HAL_ERROR;
+        }
+        return 0;
+    }
+
+    float avg_radius = (radius_x + radius_y + radius_z) / 3.0f;
+
+    cal.offset_x = ((float)(max_x + min_x)) * 0.5f;
+    cal.offset_y = ((float)(max_y + min_y)) * 0.5f;
+    cal.offset_z = ((float)(max_z + min_z)) * 0.5f;
+
+    cal.scale_x = avg_radius / radius_x;
+    cal.scale_y = avg_radius / radius_y;
+    cal.scale_z = avg_radius / radius_z;
+
+    if (status != NULL) {
+        *status = HAL_OK;
+    }
+    return 1;
 }
 
 void qmc_test(void)
 {
-    HAL_StatusTypeDef status;
+    HAL_StatusTypeDef status = HAL_OK;
     char msg[128];
-    Qmc qmc_dummy = {0};
-    Qmc *qmc = &qmc_dummy;
-    qmc_read(&status, qmc);
+    static Qmc qmc = {0};
+    uint8_t has_new_sample = qmc_read_latest(&status, &qmc);
 
-    if (status == HAL_BUSY) {
-        return;   // shared I2C bus busy, just try again next time
-    }
-
-    if (status != HAL_OK) {
+    if (status != HAL_OK && status != HAL_BUSY) {
         int len = snprintf(msg, sizeof(msg), "QMC read error: %d\r\n", (int)status);
         CDC_Transmit_FS((uint8_t *)msg, len);
         return;
     }
 
-    /* Only print when a fresh DMA read has been completed and qmc struct updated */
-    
+    if (!has_new_sample) {
+        return;
+    }
+
     int len = snprintf(msg, sizeof(msg),
-                        "QMC raw: X=%d Y=%d Z=%d | cal: X=%.2f Y=%.2f Z=%.2f\r\n",
-                        qmc->mx_raw, qmc->my_raw, qmc->mz_raw,
-                        qmc->mx, qmc->my, qmc->mz);
+                        ">MX:%d,MY:%d,MZ:%d\r\n",
+                        qmc.mx_raw, qmc.my_raw, qmc.mz_raw
+                        );
 
     CDC_Transmit_FS((uint8_t *)msg, len);
 
@@ -113,9 +216,9 @@ float calculate_heading_degrees(Imu imu_data, Qmc qmc_data)
     float pitch = atan2f(-ax, sqrtf(ay * ay + az * az));
 
     // Magnetometer raw values
-    float mx = qmc_data.mx_raw;
-    float my = qmc_data.my_raw;
-    float mz = qmc_data.mz_raw;
+    float mx = qmc_data.mx;
+    float my = qmc_data.my;
+    float mz = qmc_data.mz;
 
     // Tilt compensation
     float mx_comp = mx * cosf(pitch) + mz * sinf(pitch);
@@ -131,7 +234,7 @@ float calculate_heading_degrees(Imu imu_data, Qmc qmc_data)
 
     // Magnetic declination (example: ~5.0 degrees east)
     // Set this to 0 first, then tune later
-    float declination = 0.0f;
+    float declination = -15.0f;
     heading += declination;
 
     // Convert to degrees
@@ -145,10 +248,35 @@ float calculate_heading_degrees(Imu imu_data, Qmc qmc_data)
         heading_deg -= 360.0f;
     }
 
-    return heading_deg;
-
-
+    return heading_deg;   
 }
+
+void qmc_heading_test_plot(HAL_StatusTypeDef *status, Imu *imu, Qmc *qmc) {
+    qmc_read(status, qmc);
+    HAL_Delay(50);
+    mpu6050_read_raw(status, imu);
+    imu->acc_x = ((float)imu->acc_x_raw / ACC_SENS) * GRAVITY;
+    imu->acc_y = -((float)imu->acc_y_raw / ACC_SENS) * GRAVITY;
+    imu->acc_z = ((float)imu->acc_z_raw / ACC_SENS) * GRAVITY;
+    imu->gyro_x = -((float)imu->gyro_x_raw / GYRO_SENS);  //joop brooking config  
+    imu->gyro_y = -((float)imu->gyro_y_raw / GYRO_SENS);  //joop brooking config
+    imu->gyro_z = -((float)imu->gyro_z_raw / GYRO_SENS);  //joop brooking config
+
+    
+    HAL_Delay(50);
+    int heading = (int) calculate_heading_degrees(*imu, *qmc);
+
+    char msg[128];
+    int len = snprintf(msg, sizeof(msg),
+                        ">Heading:%d\r\n",
+                        heading
+                        );
+
+    CDC_Transmit_FS((uint8_t *)msg, len);
+
+    HAL_Delay(50);
+}
+
 
 void QMC5883_MemRxCpltCallback(I2C_HandleTypeDef *hi2c) {
     qmc_busy = 0;
@@ -161,6 +289,4 @@ void QMC5883_ErrorCallback(I2C_HandleTypeDef *hi2c) {
     qmc_read_ready = 0;
     return;
 }
-
-
 

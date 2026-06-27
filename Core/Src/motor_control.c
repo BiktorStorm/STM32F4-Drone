@@ -7,19 +7,28 @@
 static uint32_t dshot_dma_buf[DSHOT_DMA_LEN];
 extern TIM_HandleTypeDef htim3;
 
+static uint16_t clamp_servo_us(uint16_t us)
+{
+  if (us < 1000u) return 1000u;
+  if (us > 2000u) return 2000u;
+  return us;
+}
+
+static uint16_t servo_us_to_oneshot125_ticks(uint16_t us)
+{
+  // OneShot125 maps 1000-2000us command space to 125-250us pulses.
+  return (uint16_t)(clamp_servo_us(us) / 8u);
+}
+
 uint16_t u16_max(uint16_t a, uint16_t b) {
     return (a > b) ? a : b;
 }
 
 void motors_set_us(uint16_t esc_1, uint16_t esc_2, uint16_t esc_3, uint16_t esc_4) {
-  if (esc_1 < 1000) esc_1 = 1000;
-  if (esc_1 > 2000) esc_1 = 2000;
-  if (esc_2 < 1000) esc_2 = 1000;
-  if (esc_2 > 2000) esc_2 = 2000;
-  if (esc_3 < 1000) esc_3 = 1000;
-  if (esc_3 > 2000) esc_3 = 2000;
-  if (esc_4 < 1000) esc_4 = 1000;
-  if (esc_4 > 2000) esc_4 = 2000;
+  esc_1 = servo_us_to_oneshot125_ticks(esc_1);
+  esc_2 = servo_us_to_oneshot125_ticks(esc_2);
+  esc_3 = servo_us_to_oneshot125_ticks(esc_3);
+  esc_4 = servo_us_to_oneshot125_ticks(esc_4);
   
   __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, esc_1);
   __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, esc_2);
@@ -29,14 +38,11 @@ void motors_set_us(uint16_t esc_1, uint16_t esc_2, uint16_t esc_3, uint16_t esc_
 }
 
 void esc_set_us(uint16_t us, uint32_t TIM_channel) {
-  if (us < 1000) us = 1000;
-  if (us > 2000) us = 2000;
-  __HAL_TIM_SET_COMPARE(&htim3, TIM_channel, us);
+  __HAL_TIM_SET_COMPARE(&htim3, TIM_channel, servo_us_to_oneshot125_ticks(us));
 }
 
 void esc_set_us_ALL(uint16_t us) {
-  if (us < 1000) us = 1000;
-  if (us > 2000) us = 2000;
+  us = servo_us_to_oneshot125_ticks(us);
   __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, us);
   __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, us);
   __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, us);
@@ -44,15 +50,9 @@ void esc_set_us_ALL(uint16_t us) {
 }
 
 void esc_calibrate(void){
-    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 2000);
-    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 2000);
-    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, 2000);
-    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_4, 2000);
+    esc_set_us_ALL(2000u);
     HAL_Delay(8000);
-    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 1000);
-    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 1000);
-    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, 1000);
-    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_4, 1000);
+    esc_set_us_ALL(1000u);
     HAL_Delay(3000);
 }
 
