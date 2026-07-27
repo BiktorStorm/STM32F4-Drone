@@ -10,13 +10,13 @@
 #include "stdbool.h"
 
 //settings on maiden flight: P: 1.0, I : 0.0, D:80.0
-#define P 3.5f      //7.0 very small Oscillation
-#define I 0.05f     //0.1 is bad, 0.5 is good for now
-#define D 25.0f     // 80 worked but 60 causes less jitter
+#define P 3.5f //values before changing mpu6050 type 3.5f      
+#define I 0.0f //values before changing mpu6050 type 0.05f     
+#define D 25.0f //values before changing mpu6050 type 25.0f     
 
 // IMU calibration offsets (adjust these to compensate for drift)
-#define ACC_X_OFFSET  0.1f  // Adjust for roll drift (west-east) pos = up west
-#define ACC_Y_OFFSET  0.07f  // Adjust for pitch drift (south-north) pos = up south
+#define ACC_X_OFFSET  0.0f  // Adjust for roll drift (west-east) pos = up west
+#define ACC_Y_OFFSET  0.0f  // Adjust for pitch drift (south-north) pos = up south
 #define ACC_Z_OFFSET  0.0f  // Adjust for vertical drift
 #define GYRO_X_OFFSET 0.0f  // Adjust for pitch gyro bias
 #define GYRO_Y_OFFSET 0.0f  // Adjust for roll gyro bias

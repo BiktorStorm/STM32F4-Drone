@@ -9,6 +9,7 @@
 #include "usbd_cdc_if.h"
 #include <stdio.h>
 #include <limits.h>
+#include <math.h>
 
 
 
@@ -16,6 +17,23 @@
 static uint8_t qmc_raw[6];
 static volatile uint8_t qmc_read_ready = 0;
 static volatile uint8_t qmc_busy = 0;
+
+static void qmc_print_i2c_error(const char *operation, HAL_StatusTypeDef status)
+{
+    char msg[128];
+    int len = snprintf(msg, sizeof(msg),
+                       "QMC %s error: status=%d i2c_error=0x%08lX\r\n",
+                       operation,
+                       (int)status,
+                       (unsigned long)HAL_I2C_GetError(&hi2c1));
+
+    if (len > 0) {
+        if (len > (int)sizeof(msg)) {
+            len = sizeof(msg);
+        }
+        CDC_Transmit_FS((uint8_t *)msg, len);
+    }
+}
 
 Cal cal = {
     .offset_x = 0.0f,
@@ -37,6 +55,11 @@ void qmc_read_DMA_start(HAL_StatusTypeDef *status) {
   I2C_Dispatch_SetOwner(&hi2c1, I2C_OWNER_QMC5883);
   
   *status = HAL_I2C_Mem_Read_DMA(&hi2c1, QMC_DEVICE_ADDRESS , QMC_BASE_ADDR, I2C_MEMADD_SIZE_8BIT, qmc_raw, QMC_RAW_LEN);
+  if (*status != HAL_OK) {
+    qmc_busy = 0;
+    qmc_read_ready = 0;
+    I2C_Dispatch_SetOwner(&hi2c1, I2C_OWNER_NONE);
+  }
 }
 
 void qmc_init(HAL_StatusTypeDef *status)
@@ -49,17 +72,34 @@ void qmc_init(HAL_StatusTypeDef *status)
     cal.scale_z = 1.0f;
 
     *status = HAL_I2C_IsDeviceReady(&hi2c1, QMC_DEVICE_ADDRESS, 3, 50);
-    if (*status != HAL_OK) return;
+    if (*status != HAL_OK) {
+        qmc_print_i2c_error("ready", *status);
+        I2C_Dispatch_SetOwner(&hi2c1, I2C_OWNER_NONE);
+        return;
+    }
     
     uint8_t setrst = 0x01;
     *status = HAL_I2C_Mem_Write(&hi2c1, QMC_DEVICE_ADDRESS, 0x0B, I2C_MEMADD_SIZE_8BIT, &setrst, 1, 100);
-    if (*status != HAL_OK) return;
+    if (*status != HAL_OK) {
+        qmc_print_i2c_error("set/reset", *status);
+        I2C_Dispatch_SetOwner(&hi2c1, I2C_OWNER_NONE);
+        return;
+    }
     
     uint8_t ctrl1 = 0x0D;   // OSR=512, RNG=8G, ODR=50Hz, MODE=continuous
     *status = HAL_I2C_Mem_Write(&hi2c1, QMC_DEVICE_ADDRESS, 0x09, I2C_MEMADD_SIZE_8BIT, &ctrl1, 1, 100);
-
+    if (*status != HAL_OK) {
+        qmc_print_i2c_error("config", *status);
+        I2C_Dispatch_SetOwner(&hi2c1, I2C_OWNER_NONE);
+        return;
+    }
     
     qmc_read_DMA_start(status);
+    if (*status != HAL_OK && *status != HAL_BUSY) {
+        qmc_print_i2c_error("dma start", *status);
+    }
+
+    I2C_Dispatch_SetOwner(&hi2c1, I2C_OWNER_NONE);
 }
 uint8_t qmc_get_drdy(HAL_StatusTypeDef *status) {
     uint8_t drdy;
@@ -238,7 +278,7 @@ float calculate_heading_degrees(Imu imu_data, Qmc qmc_data)
     heading += declination;
 
     // Convert to degrees
-    float heading_deg = heading * 180.0f / M_PI;
+    float heading_deg = heading * 180.0f / QMC_PI;
 
     // Wrap to 0..360
     if (heading_deg < 0.0f) {
@@ -289,4 +329,3 @@ void QMC5883_ErrorCallback(I2C_HandleTypeDef *hi2c) {
     qmc_read_ready = 0;
     return;
 }
-

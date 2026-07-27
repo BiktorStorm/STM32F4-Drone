@@ -158,7 +158,7 @@ void bmp_test(HAL_StatusTypeDef *status){
 
         if(*status == HAL_OK) {
         char cdc_buf[64];
-        int len = snprintf(cdc_buf, sizeof(cdc_buf), "Pressure raw: %d Temp: %d\r\n", press, temp);
+        int len = snprintf(cdc_buf, sizeof(cdc_buf), "Pressure raw: %d Temp: %d\r\n", (int)press, (int)temp);
             if(len > 0){
                 if (len > sizeof(cdc_buf)) {
                 len = sizeof(cdc_buf);  
@@ -257,6 +257,8 @@ void bmp_init(HAL_StatusTypeDef *status) {
     bmp_tmp.pressure_raw = tot_press_raw / 10;
     bmp_compute(&bmp_tmp);
     home_elevation = bmp_get_elevation_asl_m(&bmp_tmp);
+
+    I2C_Dispatch_SetOwner(&hi2c1, I2C_OWNER_NONE);
     return;
 }
 

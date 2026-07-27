@@ -4,10 +4,10 @@
 #include "main.h"
 #include "mpu6050.h"
 
-#define QMC_DEVICE_ADDRESS (0x0D << 1)
+#define QMC_DEVICE_ADDRESS 0x0D 
 #define QMC_BASE_ADDR 0x0
 #define QMC_RAW_LEN 6
-#define M_PI 3.14159265358979323846f
+#define QMC_PI 3.14159265358979323846f
 
 typedef struct{
     int16_t mx_raw;

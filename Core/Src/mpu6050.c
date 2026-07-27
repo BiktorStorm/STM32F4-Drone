@@ -101,19 +101,21 @@ void mpu6050_init(HAL_StatusTypeDef *status) {
     uint8_t buffer1[] = "Cannot connect to MPU-6050, returning from initialization\n";
     CDC_Transmit_FS(buffer1, sizeof(buffer1));
     *status = HAL_ERROR;
+    I2C_Dispatch_SetOwner(&hi2c1, I2C_OWNER_NONE);
     return;
   }
 
   uint8_t temp_data = 0;
   ret = HAL_I2C_Mem_Write(&hi2c1, MPU_DEVICE_ADDRESS, PWR_MGMT1_REG, I2C_MEMADD_SIZE_8BIT, &temp_data, sizeof(temp_data), 100);
   if(ret == HAL_OK){
-  uint8_t buffer[] = "PWR_MGMT1 configured\n";
-  CDC_Transmit_FS(buffer, sizeof(buffer));
+    uint8_t buffer[] = "PWR_MGMT1 configured\n";
+    CDC_Transmit_FS(buffer, sizeof(buffer));
   } else {
-  uint8_t buffer1[] = "Cannot configure PWR_MGMT1, returning form initialization\n";
-  CDC_Transmit_FS(buffer1, sizeof(buffer1));
-  *status = HAL_ERROR;
-  return;
+    uint8_t buffer1[] = "Cannot configure PWR_MGMT1, returning form initialization\n";
+    CDC_Transmit_FS(buffer1, sizeof(buffer1));
+    *status = HAL_ERROR;
+    I2C_Dispatch_SetOwner(&hi2c1, I2C_OWNER_NONE);
+    return;
   }
 
   temp_data = FS_GYRO_500;
@@ -125,31 +127,34 @@ void mpu6050_init(HAL_StatusTypeDef *status) {
     uint8_t buffer1[] = "Cannot configure gyro, returning form initialization\n";
     CDC_Transmit_FS(buffer1, sizeof(buffer1));
     *status = HAL_ERROR;
+    I2C_Dispatch_SetOwner(&hi2c1, I2C_OWNER_NONE);
     return;
   }
 
   temp_data = FS_ACC_8;
   ret = HAL_I2C_Mem_Write(&hi2c1, MPU_DEVICE_ADDRESS, REG_CONFIG_ACC, I2C_MEMADD_SIZE_8BIT, &temp_data, sizeof(temp_data), 100);
   if(ret == HAL_OK){
-  uint8_t buffer[] = "Accelerometer configured\n";
-  CDC_Transmit_FS(buffer, sizeof(buffer));
+    uint8_t buffer[] = "Accelerometer configured\n";
+    CDC_Transmit_FS(buffer, sizeof(buffer));
   } else {
-  uint8_t buffer1[] = "Cannot configure ACCELEROMETER, returning form initialization\n";
-  CDC_Transmit_FS(buffer1, sizeof(buffer1));
-  *status = HAL_ERROR;
-  return;
+    uint8_t buffer1[] = "Cannot configure ACCELEROMETER, returning form initialization\n";
+    CDC_Transmit_FS(buffer1, sizeof(buffer1));
+    *status = HAL_ERROR;
+    I2C_Dispatch_SetOwner(&hi2c1, I2C_OWNER_NONE);
+    return;
   }
 
   temp_data = 0x03;
   ret = HAL_I2C_Mem_Write(&hi2c1, MPU_DEVICE_ADDRESS, REG_CONFIG, I2C_MEMADD_SIZE_8BIT, &temp_data, sizeof(temp_data), 100);
   if(ret == HAL_OK){
-  uint8_t buffer[] = "LPF configured\n";
-  CDC_Transmit_FS(buffer, sizeof(buffer));
+    uint8_t buffer[] = "LPF configured\n";
+    CDC_Transmit_FS(buffer, sizeof(buffer));
   } else {
-  uint8_t buffer1[] = "Cannot configure LPF, returning form initialization\n";
-  CDC_Transmit_FS(buffer1, sizeof(buffer1));
-  *status = HAL_ERROR;
-  return;
+    uint8_t buffer1[] = "Cannot configure LPF, returning form initialization\n";
+    CDC_Transmit_FS(buffer1, sizeof(buffer1));
+    *status = HAL_ERROR;
+    I2C_Dispatch_SetOwner(&hi2c1, I2C_OWNER_NONE);
+    return;
   }
 
   // temp_data = INT_RD_CLEAR;
@@ -174,7 +179,7 @@ void mpu6050_init(HAL_StatusTypeDef *status) {
   // return;
   // }
   gyro_calibrate(status);
-  // acc_calibrate(status); 
+  acc_calibrate(status); 
   
   *status = HAL_OK;
 }

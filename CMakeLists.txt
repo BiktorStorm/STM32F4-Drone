@@ -47,7 +47,6 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     Core/Src/bmp280.c
     Core/Src/control.c
-    Core/Src/drone_control.c
     Core/Src/gps.c
     Core/Src/i2c.c
     Core/Src/motor_control.c

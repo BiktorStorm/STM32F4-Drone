@@ -132,17 +132,14 @@ int main(void)
   HAL_Delay(2000); 
 
   mpu6050_init(&status);
-
-  bmp_init(&status);
-  qmc_init(&status);
-
+  // bmp_init(&status);   //this takes cointrol of I2c and never lets go
   motor_control_init();
   ibus_init();
-  // qmc_calibrate(&status, 200);  //calibrate for 10 seconds, make sure to rotate the drone in all orientations during this time
-
+  // qmc_init(&status);
   // gps_init();
-  // esc_calibrate();  // MAX speed for 8 seconds, then 3 seconds lowest speed 
 
+  // qmc_calibrate(&status, 200);  //calibrate for 10 seconds, make sure to rotate the drone in all orientations during this time
+  // esc_calibrate();  // MAX speed for 8 seconds, then 3 seconds lowest speed 
 
   HAL_TIM_Base_Start_IT(&htim2); //the PID loop timer on 500Hz refresh rate
   HAL_TIM_Base_Start_IT(&htim4); //slow loop for GPS, qmc5883 and bmp280
@@ -161,25 +158,27 @@ int main(void)
     // HAL_Delay(100);
     // qmc_test();
     // HAL_Delay(100);
-    mpu6050_test(&status);
-    HAL_Delay(300);
-    bmp_test(&status);
-    HAL_Delay(300);
+    // mpu6050_test(&status);
+    // HAL_Delay(300);
+    // bmp_test(&status);
+    // HAL_Delay(300);
 
-    uint8_t msg[8] = "HELLO\r\n";
-    CDC_Transmit_FS(msg, 8);
+    // uint8_t msg[8] = "HELLO\r\n";
+    // CDC_Transmit_FS(msg, 8);
+    // test_motor_channel(3); 
+    // HAL_Delay(100);
 
-    HAL_Delay(100);
+    if(pid_timer_flag && periph_poll_flag) { 
+      pid_timer_flag = 0;
+      periph_poll_flag = 0;
+      control_update(DT, &status, PERIPH_READY);
+    }
+    else if(pid_timer_flag) {
+      pid_timer_flag = 0;
+      control_update(DT, &status, PERIPH_NOT_READY);
+    }
 
-    // if(pid_timer_flag && periph_poll_flag) { 
-    //   pid_timer_flag = 0;
-    //   periph_poll_flag = 0;
-    //   control_update(DT, &status, PERIPH_READY);
-    // }
-    // else if(pid_timer_flag) {
-    //   pid_timer_flag = 0;
-    //   control_update(DT, &status, PERIPH_NOT_READY);
-    // }
+
   }
   /* USER CODE END 3 */
 }

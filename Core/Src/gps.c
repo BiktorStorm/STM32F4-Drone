@@ -4,6 +4,7 @@
 #include "gps.h"
 #include "usbd_cdc_if.h"
 #include "mpu6050.h"
+#include "math.h"
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -238,10 +239,10 @@ void gps_init(void) {
 
 
     Gps_Data tmp_gps = {0};
-    while(((int) tmp_gps.latitude_deg) == 0 && ((int) tmp_gps.longitude_deg) == 0 && tmp_gps.fix_quality < 6) {
-        gps_read( &tmp_gps);
-        HAL_Delay(100);
-    }
+    // while(((int) tmp_gps.latitude_deg) == 0 && ((int) tmp_gps.longitude_deg) == 0 && tmp_gps.fix_quality < 6) {
+    //     gps_read( &tmp_gps);
+    //     HAL_Delay(100);
+    // }
     home_lat = tmp_gps.latitude_deg;
     home_long = tmp_gps.longitude_deg;
 
