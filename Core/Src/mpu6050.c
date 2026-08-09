@@ -157,30 +157,10 @@ void mpu6050_init(HAL_StatusTypeDef *status) {
     return;
   }
 
-  // temp_data = INT_RD_CLEAR;
-  // ret = HAL_I2C_Mem_Write(&hi2c1, MPU_DEVICE_ADDRESS, REG_CONFIG_INT, I2C_MEMADD_SIZE_8BIT, &temp_data, sizeof(temp_data), 100);
-  // if(ret == HAL_OK){
-  // uint8_t buffer[] = "CONFIG_INT configured\n";
-  // CDC_Transmit_FS(buffer, sizeof(buffer));
-  // } else {
-  // uint8_t buffer1[] = "Cannot configure CONFIG_INT, returning form initialization\n";
-  // CDC_Transmit_FS(buffer1, sizeof(buffer1));
-  // return;
-  // }
-
-  // temp_data = DATA_RDY_EN;
-  // ret = HAL_I2C_Mem_Write(&hi2c1, MPU_DEVICE_ADDRESS, REG_INT_ENABLE, I2C_MEMADD_SIZE_8BIT, &temp_data, sizeof(temp_data), 100);
-  // if(ret == HAL_OK){
-  // uint8_t buffer[] = "INT_ENABLE configured\n";
-  // CDC_Transmit_FS(buffer, sizeof(buffer));
-  // } else {
-  // uint8_t buffer1[] = "Cannot configure INT_ENABLE, returning form initialization\n";
-  // CDC_Transmit_FS(buffer1, sizeof(buffer1));
-  // return;
-  // }
   gyro_calibrate(status);
-  acc_calibrate(status); 
+  // acc_calibrate(status); 
   
+  I2C_Dispatch_SetOwner(&hi2c1, I2C_OWNER_NONE);
   *status = HAL_OK;
 }
 

@@ -9,18 +9,18 @@
 #include "math.h"
 #include "stdbool.h"
 
-//settings on maiden flight: P: 1.0, I : 0.0, D:80.0
-#define P 3.5f //values before changing mpu6050 type 3.5f      
-#define I 0.0f //values before changing mpu6050 type 0.05f     
-#define D 25.0f //values before changing mpu6050 type 25.0f     
+//settings on maiden flight: P: 0.6, I : 0.0, D: 3.5
+#define P 1.0f 
+#define I 0.005f 
+#define D 4.0f   
 
-// IMU calibration offsets (adjust these to compensate for drift)
-#define ACC_X_OFFSET  0.0f  // Adjust for roll drift (west-east) pos = up west
-#define ACC_Y_OFFSET  0.0f  // Adjust for pitch drift (south-north) pos = up south
-#define ACC_Z_OFFSET  0.0f  // Adjust for vertical drift
-#define GYRO_X_OFFSET 0.0f  // Adjust for pitch gyro bias
-#define GYRO_Y_OFFSET 0.0f  // Adjust for roll gyro bias
-#define GYRO_Z_OFFSET 0.0f  // Adjust for yaw gyro bias
+// IMU calibration offsets after axis signs are converted to the control frame.
+#define ACC_X_OFFSET  -1.0f  // Roll accel offset: positive when left side is up
+#define ACC_Y_OFFSET  0.0f  // Pitch accel offset: positive when nose is up
+#define ACC_Z_OFFSET  0.0f  // Vertical accel offset: positive when drone is level
+#define GYRO_X_OFFSET 0.0f  // Pitch-rate gyro offset: positive when nose moves up
+#define GYRO_Y_OFFSET 0.0f  // Roll-rate gyro offset: positive when left side moves up
+#define GYRO_Z_OFFSET 0.0f  // Yaw-rate gyro offset: positive when yawing right
 
 extern double home_lat;
 extern double home_long;
@@ -53,8 +53,8 @@ Rc_Input rc = {
   float pid_d_gain_pitch = D;  //Gain setting for the pitch D-controller.
   int pid_max_pitch = MAX_ROLL_PITCH;          //Maximum output of the PID-controller (+/-)
 
-  float pid_p_gain_yaw = 4.0f;                //Gain setting for the pitch P-controller. //4.0
-  float pid_i_gain_yaw = 0.03f;               //Gain setting for the pitch I-controller. //0.02
+  float pid_p_gain_yaw = 2.0f;                //Gain setting for the pitch P-controller.
+  float pid_i_gain_yaw = 0.02f;               //Gain setting for the pitch I-controller.
   float pid_d_gain_yaw = 0.0f;                //Gain setting for the pitch D-controller.
   int pid_max_yaw = 400;          
   float pid_i_mem_roll = 0.0f, pid_roll_setpoint = 0.0f, gyro_roll_input = 0.0f, pid_output_roll = 0.0f, pid_last_roll_d_error = 0.0f;
@@ -110,11 +110,11 @@ void control_update(float dt, HAL_StatusTypeDef *status, Periph_status periph_st
         qmc_read(status, &qmc);     //might be to slow of a refresh rate for the RTH function 
     }
     if(imu_new_sample) {
-        imu.acc_x = ((float)imu.acc_x_raw / ACC_SENS) * GRAVITY;
-        imu.acc_y = -((float)imu.acc_y_raw / ACC_SENS) * GRAVITY;
+        imu.acc_x = - ((float)imu.acc_x_raw / ACC_SENS) * GRAVITY;
+        imu.acc_y = ((float)imu.acc_y_raw / ACC_SENS) * GRAVITY;
         imu.acc_z = ((float)imu.acc_z_raw / ACC_SENS) * GRAVITY;
-        imu.gyro_x = -((float)imu.gyro_x_raw / GYRO_SENS);  //joop brooking config  
-        imu.gyro_y = -((float)imu.gyro_y_raw / GYRO_SENS);  //joop brooking config
+        imu.gyro_x = ((float)imu.gyro_x_raw / GYRO_SENS);  //joop brooking config  
+        imu.gyro_y = ((float)imu.gyro_y_raw / GYRO_SENS);  //joop brooking config
         imu.gyro_z = -((float)imu.gyro_z_raw / GYRO_SENS);  //joop brooking config
 
         // Apply IMU calibration offsets
@@ -320,10 +320,10 @@ void control_update(float dt, HAL_StatusTypeDef *status, Periph_status periph_st
         float esc_3_cmd = 0.0f;
         float esc_4_cmd = 0.0f;
         throttle_cmd = clampf_local(throttle_cmd, 1000.0f, (float)MAX_THROTTLE);
-        esc_1_cmd = throttle_cmd - pid_output_pitch + pid_output_roll + pid_output_yaw; //Calculate the pulse for esc 1 (front-right - CW)
-        esc_2_cmd = throttle_cmd + pid_output_pitch + pid_output_roll - pid_output_yaw; //Calculate the pulse for esc 2 (rear-right - CCW)
-        esc_3_cmd = throttle_cmd + pid_output_pitch - pid_output_roll + pid_output_yaw; //Calculate the pulse for esc 3 (rear-left - CW)
-        esc_4_cmd = throttle_cmd - pid_output_pitch - pid_output_roll - pid_output_yaw; //Calculate the pulse for esc 4 (front-left - CCW)
+        esc_1_cmd = throttle_cmd - pid_output_pitch + pid_output_roll - pid_output_yaw; //Calculate the pulse for esc 1 (front-right - CCW)
+        esc_2_cmd = throttle_cmd + pid_output_pitch + pid_output_roll + pid_output_yaw; //Calculate the pulse for esc 2 (rear-right - CW)
+        esc_3_cmd = throttle_cmd + pid_output_pitch - pid_output_roll - pid_output_yaw; //Calculate the pulse for esc 3 (rear-left - CCW)
+        esc_4_cmd = throttle_cmd - pid_output_pitch - pid_output_roll + pid_output_yaw; //Calculate the pulse for esc 4 (front-left - CW)
 
         // if (battery_voltage < 1240 && battery_voltage > 800){                   //Is the battery connected?
         //   esc_1 += esc_1 * ((1240 - battery_voltage)/(float)3500);              //Compensate the esc-1 pulse for voltage drop.
@@ -331,10 +331,10 @@ void control_update(float dt, HAL_StatusTypeDef *status, Periph_status periph_st
         //   esc_3 += esc_3 * ((1240 - battery_voltage)/(float)3500);              //Compensate the esc-3 pulse for voltage drop.
         //   esc_4 += esc_4 * ((1240 - battery_voltage)/(float)3500);              //Compensate the esc-4 pulse for voltage drop.
         // } 
-        esc_1 = (uint16_t)clampf_local(esc_1_cmd, 1100.0f, 2000.0f);            //Keep the motors running.
-        esc_2 = (uint16_t)clampf_local(esc_2_cmd, 1100.0f, 2000.0f);            //Keep the motors running.
-        esc_3 = (uint16_t)clampf_local(esc_3_cmd, 1100.0f, 2000.0f);            //Keep the motors running.
-        esc_4 = (uint16_t)clampf_local(esc_4_cmd, 1100.0f, 2000.0f);            //Keep the motors running.
+        esc_1 = (uint16_t)clampf_local(esc_1_cmd, 1050.0f, 2000.0f);            //Keep the motors running.
+        esc_2 = (uint16_t)clampf_local(esc_2_cmd, 1050.0f, 2000.0f);            //Keep the motors running.
+        esc_3 = (uint16_t)clampf_local(esc_3_cmd, 1050.0f, 2000.0f);            //Keep the motors running.
+        esc_4 = (uint16_t)clampf_local(esc_4_cmd, 1050.0f, 2000.0f);            //Keep the motors running.
         } else {
         esc_1 = 1000;
         esc_2 = 1000;

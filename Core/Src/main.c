@@ -132,7 +132,7 @@ int main(void)
   HAL_Delay(2000); 
 
   mpu6050_init(&status);
-  // bmp_init(&status);   //this takes cointrol of I2c and never lets go
+  bmp_init(&status);   
   motor_control_init();
   ibus_init();
   // qmc_init(&status);
