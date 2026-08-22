@@ -97,7 +97,6 @@ static void MX_TIM4_Init(void);
 int main(void)
 {
 
-
   /* USER CODE BEGIN 1 */
   HAL_StatusTypeDef status = HAL_OK;
   /* USER CODE END 1 */
